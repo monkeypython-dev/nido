@@ -107,7 +107,8 @@ export function foodStreak(user) {
 }
 
 export function coins(xp) {
-  return xp - (getState().profile.pet.spent || 0);
+  const pet = getState().profile.pet;
+  return xp - (pet.spent || 0) + (pet.bonus || 0);
 }
 
 // ---------------- Logros ----------------

@@ -3,6 +3,7 @@ import { esc, today, addDays, fmtDate, fmtNum, weekStart, weekday, pick, DAY_SHO
 import { computeXP, stageInfo, mood, weekCount, teamWeekStreak, coins, evaluateAchievements, foodTotals, foodGoodDays, STAGES, XP, USERS } from './game.js';
 import { kcalTarget, computedTarget, ACTIVITY, GOALS, inTarget } from './calc.js';
 import { petSVG, ITEMS, itemPreview, PET_COLORS, MOOD_LINES } from './pet.js';
+import { weekChallenge, pendingChests, rollChest, prsInSession, recentPR, painSeries, painAlert, progression, restFor, weekSummary, calendarLink, REMINDERS } from './extras.js';
 import { PLANS, TEMPLATES, ACTIVITY_TYPES, CARDIO_KINDS, IMG_BASE } from './plans.js';
 import { searchLocal, searchOFF, lookupBarcode, MEALS } from './food.js';
 import { initSync, login, logout, isConfigured, onStatus, getStatus, getUser, syncNow } from './sync.js';
@@ -152,15 +153,34 @@ const MOODS = {
   feliz: { l: 'Feliz', c: 'var(--ok)' },
   normal: { l: 'Tranquila', c: 'var(--primary)' },
   triste: { l: 'Te echa de menos', c: 'var(--bad)' },
+  dormida: { l: 'Durmiendo', c: 'var(--primary)' },
 };
+
+const isNight = () => { const h = new Date().getHours(); return h >= 23 || h < 7; };
+const stripEmoji = t => t.replace(/\s*[\u{1F300}-\u{1FAFF}\u2600-\u27BF]+/gu, '');
+
+/** Frase de la mascota según lo que está pasando. */
+function petLine(st, m) {
+  const users = S().profile.users;
+  if (st.index === 0) return computeXP().xp === 0 ? 'Entrenad para que nazca: cada sesión le da calor.' : 'Se está moviendo… seguid así.';
+  if (isNight()) return 'Zzz… mañana más. Descansar también es entrenar.';
+  const pr = recentPR();
+  if (pr) return `¡${users[pr.user].name} ha batido su récord en ${pr.name.toLowerCase()}: ${fmtNum(pr.kg, 1)} kg!`;
+  const lastFood = list('foods').sort((a, b) => b.createdAt - a.createdAt)[0];
+  if (lastFood && Date.now() - lastFood.createdAt < 20 * 60000) return `¡Ñam! Gracias por apuntar ${lastFood.name.toLowerCase().split(' · ')[0]}.`;
+  const did = USERS.filter(u => list('sessions', s => s.user === u && s.date === today()).length);
+  if (did.length === 1) return `${users[did[0]].name} ya ha entrenado hoy. ¿Se anima ${users[other(did[0])].name}?`;
+  return stripEmoji(pick(MOOD_LINES[m], today() + m));
+}
 
 function viewPet() {
   const { xp, days, teamDays } = computeXP();
   const st = stageInfo(xp);
-  const m = mood(days);
+  const m0 = mood(days);
+  const m = st.index && isNight() ? 'dormida' : m0;
   const pet = S().profile.pet;
   const name = pet.name || (st.index === 0 ? 'Huevo misterioso' : 'Sin nombre');
-  const line = st.index === 0 ? (xp === 0 ? 'Entrenad para que nazca: cada sesión le da calor.' : 'Se está moviendo… seguid así.') : pick(MOOD_LINES[m], today() + m).replace(/\s*[\u{1F300}-\u{1FAFF}☀-➿]+/gu, '');
+  const line = petLine(st, m0);
   const ws = weekStart(today());
   const weekDays = [...Array(7)].map((_, i) => addDays(ws, i));
   const users = S().profile.users;
@@ -187,7 +207,12 @@ function viewPet() {
     </div>
   </section>
 
+  ${chestCard()}
+  ${(weekday(today()) === 0 && new Date().getHours() >= 18) || weekday(today()) === 1 ? `<button class="btn soft block" style="margin-top:12px" data-action="week-summary">${icon('calendar-check', { size: 16 })} Ver el resumen de la semana</button>` : ''}
+  ${cheersInbox()}
   ${todayCard()}
+  ${challengeCard()}
+  ${partnerFeed()}
 
   <div class="kpis">
     <div class="kpi">${tile('flame', 'var(--fire)')}<div><b class="num">${streak}</b><span>sem. perfectas</span></div></div>
@@ -231,8 +256,219 @@ function todayCard() {
   return `<section class="card">
     <div class="card-head"><h3>${p.flexible ? 'Tu próximo entreno' : 'Plan de hoy'}</h3>${done.length ? `<span class="chip ok">${icon('check', { size: 14 })} Hecho${done.length > 1 ? ' ×' + done.length : ''}</span>` : ''}</div>
     ${main}
+    ${u === 'julio' && painAlert() ? `<div class="warn mt">${icon('triangle-alert', { size: 16 })}<span>${esc(painAlert().text)}</span></div>` : ''}
     ${oDone && !done.length ? `<div class="info">${icon('users', { size: 16 })}<span>${esc(U(o).name)} ya ha entrenado hoy. Si vas tú también, +${XP.team} XP extra.</span></div>` : ''}
   </section>`;
+}
+
+function chestCard() {
+  const c = pendingChests()[0];
+  if (!c) return '';
+  return `<section class="card chest-card">
+    <div class="today-main">${tile('award', 'var(--gold)', 'lg')}<div class="grow"><div class="today-title">¡Reto superado!</div><div class="today-meta">${esc(c.title)}</div></div></div>
+    <button class="btn primary block mt" data-action="open-chest" data-ws="${c.ws}">${icon('sparkles', { size: 16 })} Abrir cofre</button>
+  </section>`;
+}
+
+function challengeCard() {
+  const c = weekChallenge();
+  const left = 6 - ((weekday(today()) + 6) % 7);
+  return `<section class="card">
+    <div class="card-head"><h3>Reto de la semana</h3><span class="sub">${c.claimed ? 'Cofre abierto' : c.done ? 'Completado' : left === 0 ? 'Último día' : `Quedan ${left} días`}</span></div>
+    <div class="today-main">${tile(c.ic, 'var(--primary)')}<div class="grow"><b class="small block">${esc(c.title)}</b>
+      <div class="progress-line"><div style="width:${Math.round(c.value / c.target * 100)}%"></div></div></div><b class="num small">${c.value}/${c.target}</b></div>
+    <p class="tiny muted" style="margin-bottom:0">Premio: un cofre con un accesorio exclusivo que no se puede comprar.</p>
+  </section>`;
+}
+
+function cheersInbox() {
+  const mine = list('cheers', c => c.to === cu() && !c.seen).sort((a, b) => a.createdAt - b.createdAt);
+  if (!mine.length) return '';
+  return `<section class="card">
+    <div class="card-head"><h3>Ánimos de ${esc(U(other(cu())).name)}</h3>${avatar(other(cu()), 'sm')}</div>
+    ${mine.slice(-4).map(c => `<div class="cheer-row"><span class="cheer-emoji">${esc(c.emoji)}</span><span class="grow small">${c.text ? esc(c.text) : 'Te ha mandado ánimos'}${c.label ? `<span class="tiny muted block">${esc(c.label)}</span>` : ''}</span><span class="tiny muted">${fmtDate(c.date)}</span></div>`).join('')}
+    <button class="btn soft block mt" data-action="cheers-seen">${icon('heart-handshake', { size: 16 })} ¡Gracias!</button>
+  </section>`;
+}
+
+function partnerFeed() {
+  const o = other(cu());
+  const recent = list('sessions', s => s.user === o && s.date >= addDays(today(), -6)).sort((a, b) => (b.date + b.createdAt).localeCompare(a.date + a.createdAt)).slice(0, 3);
+  if (!recent.length) return '';
+  const sent = new Set(list('cheers', c => c.from === cu()).map(c => c.sessionId));
+  return `<section class="card">
+    <div class="card-head"><h3>Actividad de ${esc(U(o).name)}</h3>${avatar(o, 'sm')}</div>
+    ${recent.map(s => `<div class="hist-row">${actTile(s.type)}<span class="grow"><b class="block">${esc(sessionTitle(s))}</b><span class="tiny muted">${fmtDate(s.date)} · ${sessionSummary(s)}</span></span>
+      ${sent.has(s.id) ? `<span class="chip ok">${icon('check', { size: 13 })} Animado</span>` : `<button class="btn soft sm" data-action="cheer" data-id="${s.id}">${icon('sparkles', { size: 14 })} Animar</button>`}</div>`).join('')}
+  </section>`;
+}
+
+function openCheer(sessionId) {
+  const s = S().sessions.find(x => x.id === sessionId);
+  const o = other(cu());
+  let emoji = '💪';
+  const w = openSheet(`<h2>Animar a ${esc(U(o).name)}</h2>
+    ${s ? `<p class="small muted">${esc(sessionTitle(s))} · ${fmtDate(s.date)}</p>` : ''}
+    <div class="emoji-pick">${['💪', '🔥', '👏', '❤️', '🏆', '🚀'].map(e => `<button class="${e === emoji ? 'on' : ''}" data-e="${e}">${e}</button>`).join('')}</div>
+    <label class="field"><span>Mensaje (opcional)</span><input data-t maxlength="80" placeholder="¡Qué máquina!"></label>
+    <button class="btn primary block" data-send>${icon('sparkles', { size: 16 })} Enviar</button>`);
+  w.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.e) { emoji = b.dataset.e; w.querySelectorAll('[data-e]').forEach(x => x.classList.toggle('on', x === b)); }
+    if (b.hasAttribute('data-send')) {
+      add('cheers', { from: cu(), to: o, date: today(), emoji, text: w.querySelector('[data-t]').value.trim(), sessionId: sessionId || null, label: s ? sessionTitle(s) : '', seen: false });
+      closeSheet(w); toast(`Ánimo enviado a ${esc(U(o).name)}`, 2200, 'sparkles'); afterChange();
+    }
+  });
+}
+
+function openChest(ws) {
+  const c = weekChallenge(ws);
+  if (!c.done || c.claimed) return;
+  const prize = rollChest();
+  updateProfile(p => {
+    p.pet.chests = { ...(p.pet.chests || {}), [ws]: prize.item || 'coins' };
+    if (prize.item) p.pet.owned = [...(p.pet.owned || []), prize.item];
+    else p.pet.bonus = (p.pet.bonus || 0) + prize.coins;
+  });
+  const it = ITEMS.find(i => i.id === prize.item);
+  const pet = S().profile.pet;
+  const st = stageInfo(computeXP().xp);
+  const w = openSheet(`<div class="hatch">
+    <h2>Abriendo cofre…</h2>
+    <div class="chest-anim">${icon('award', { size: 72, sw: 1.5 })}</div>
+    <div class="chest-prize" hidden>
+      ${it ? `<div class="hatch-stage pop">${itemPreview(it, pet.color, st.index)}</div><p>Accesorio exclusivo: <b>${esc(it.l)}</b></p>
+        <button class="btn primary block" data-equip="${it.id}">${icon('shirt', { size: 16 })} Ponérselo</button>`
+        : `<p>¡Ya tenéis todos los exclusivos! <b>+${prize.coins} monedas</b></p>`}
+      <button class="btn outline block mt" data-close>Cerrar</button>
+    </div></div>`);
+  setTimeout(() => {
+    w.querySelector('.chest-anim').hidden = true;
+    w.querySelector('.chest-prize').hidden = false;
+    w.querySelector('h2').textContent = '¡Premio!';
+    confetti();
+  }, 1300);
+  w.addEventListener('click', e => {
+    if (!e.target.closest('[data-equip]')) return;
+    updateProfile(p => { p.pet.equipped[it.slot] = it.id; });
+    closeSheet(w); rerender();
+  });
+  rerender();
+}
+
+// ---------- Resumen semanal ----------
+function weekLabel(ws) {
+  const a = parseDate(ws), b = parseDate(addDays(ws, 6));
+  const m = d => d.toLocaleDateString('es-ES', { month: 'short' }).replace('.', '');
+  return a.getMonth() === b.getMonth() ? `${a.getDate()}–${b.getDate()} ${m(b)}` : `${a.getDate()} ${m(a)} – ${b.getDate()} ${m(b)}`;
+}
+
+function openSummary() {
+  const cur = weekStart(today());
+  let ws = weekday(today()) === 1 ? addDays(cur, -7) : cur;
+  const w = openSheet('', { cls: 'tall' });
+  const body = w.querySelector('.sheet-body');
+  function draw() {
+    const sum = weekSummary(ws);
+    const users = S().profile.users;
+    const pet = S().profile.pet;
+    const st = stageInfo(computeXP().xp);
+    body.innerHTML = `<h2>Resumen semanal</h2>
+      <div class="seg"><button class="${ws !== cur ? 'on' : ''}" data-w="${addDays(cur, -7)}">Semana pasada</button><button class="${ws === cur ? 'on' : ''}" data-w="${cur}">Esta semana</button></div>
+      <div class="summary-card">
+        <div class="eyebrow">Nido · ${weekLabel(ws)}</div>
+        <div class="summary-pet">${petSVG({ stageIndex: st.index, progress: st.progress, mood: 'euforica', color: pet.color, equipped: pet.equipped })}</div>
+        <div class="summary-cols">${USERS.map(u => {
+          const p = sum.per[u];
+          return `<div><div class="row gap">${avatar(u, 'sm')}<b>${esc(users[u].name)}</b></div>
+            <div class="summary-stat"><b class="num">${p.sessions}</b><span>sesiones</span></div>
+            <div class="summary-stat"><b class="num">${p.food}</b><span>días en objetivo</span></div>
+            ${p.volume ? `<div class="summary-stat"><b class="num">${fmtNum(Math.round(p.volume))}</b><span>kg levantados</span></div>` : ''}
+            ${p.km ? `<div class="summary-stat"><b class="num">${fmtNum(p.km, 1)}</b><span>km corriendo</span></div>` : ''}
+            ${p.basketMin ? `<div class="summary-stat"><b class="num">${fmtNum(p.basketMin / 60, 1)}</b><span>h de baloncesto</span></div>` : ''}</div>`;
+        }).join('')}</div>
+        <div class="summary-foot"><span>${icon('heart-handshake', { size: 15 })} ${sum.team} días juntos</span><span>${icon('sparkles', { size: 15 })} +${fmtNum(sum.xp)} XP</span><span>${icon(sum.challenge.done ? 'check' : 'target', { size: 15 })} Reto ${sum.challenge.value}/${sum.challenge.target}</span></div>
+      </div>
+      <button class="btn primary block mt" data-share-img>${icon('upload', { size: 16 })} Compartir imagen</button>
+      <button class="btn outline block mt" data-close>Cerrar</button>`;
+  }
+  body.addEventListener('click', async e => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.w) { ws = b.dataset.w; draw(); }
+    if (b.hasAttribute('data-share-img')) {
+      b.disabled = true;
+      try { await shareSummary(weekSummary(ws)); } catch (err) { console.warn(err); toast('No se pudo crear la imagen', 2200, 'triangle-alert'); }
+      b.disabled = false;
+    }
+  });
+  draw();
+}
+
+async function petImage(size) {
+  const pet = S().profile.pet;
+  const st = stageInfo(computeXP().xp);
+  const cs = getComputedStyle(document.documentElement);
+  const svg = petSVG({ stageIndex: st.index, progress: st.progress, mood: 'euforica', color: pet.color, equipped: pet.equipped })
+    .replace(/var\((--[\w-]+)\)/g, (_, v) => cs.getPropertyValue(v).trim() || '#ffffff')
+    .replace('<svg ', `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" `);
+  const img = new Image();
+  img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+  await img.decode();
+  return img;
+}
+
+async function shareSummary(sum) {
+  const W = 1080, H = 1350;
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const g = c.getContext('2d');
+  await document.fonts.ready;
+  const F = (w, px) => `${w} ${px}px Jakarta, system-ui, sans-serif`;
+  const grad = g.createLinearGradient(0, 0, W, H);
+  grad.addColorStop(0, '#7c6dff'); grad.addColorStop(1, '#3f32c9');
+  g.fillStyle = grad; g.fillRect(0, 0, W, H);
+  g.fillStyle = 'rgba(255,255,255,.75)'; g.font = F(700, 30);
+  g.fillText('NIDO · RESUMEN SEMANAL', 80, 110);
+  g.fillStyle = '#fff'; g.font = F(800, 76);
+  g.fillText(weekLabel(sum.ws), 80, 195);
+  // mascota en tarjeta redondeada
+  const img = await petImage(520);
+  g.save(); g.beginPath(); g.roundRect(80, 250, 520, 520, 48); g.clip(); g.drawImage(img, 80, 250, 520, 520); g.restore();
+  // datos de pareja a la derecha
+  const users = S().profile.users;
+  const side = [['Días juntos', sum.team], ['XP ganados', '+' + fmtNum(sum.xp)], ['Reto', `${sum.challenge.value}/${sum.challenge.target}`]];
+  side.forEach(([l, v], i) => {
+    const y = 300 + i * 165;
+    g.fillStyle = 'rgba(255,255,255,.14)'; g.beginPath(); g.roundRect(640, y - 50, 360, 140, 32); g.fill();
+    g.fillStyle = '#fff'; g.font = F(800, 64); g.fillText(String(v), 675, y + 35);
+    g.fillStyle = 'rgba(255,255,255,.75)'; g.font = F(600, 28); g.fillText(l, 675, y + 75);
+  });
+  // columnas por persona
+  USERS.forEach((u, i) => {
+    const x = 80 + i * 470, y = 830, p = sum.per[u];
+    g.fillStyle = 'rgba(255,255,255,.12)'; g.beginPath(); g.roundRect(x, y, 450, 420, 40); g.fill();
+    g.fillStyle = users[u].color; g.beginPath(); g.arc(x + 70, y + 75, 34, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#fff'; g.font = F(800, 34); g.textAlign = 'center'; g.fillText(users[u].name.charAt(0), x + 70, y + 87); g.textAlign = 'left';
+    g.font = F(800, 42); g.fillText(users[u].name, x + 125, y + 90);
+    const rows = [[p.sessions, 'sesiones'], [p.food, 'días en objetivo']];
+    if (p.volume) rows.push([fmtNum(Math.round(p.volume)), 'kg levantados']);
+    if (p.km) rows.push([fmtNum(p.km, 1), 'km corriendo']);
+    if (p.basketMin) rows.push([fmtNum(p.basketMin / 60, 1), 'h de baloncesto']);
+    rows.slice(0, 4).forEach(([v, l], k) => {
+      const yy = y + 175 + k * 68;
+      g.fillStyle = '#fff'; g.font = F(800, 46); g.fillText(String(v), x + 40, yy);
+      const wv = g.measureText(String(v)).width;
+      g.fillStyle = 'rgba(255,255,255,.75)'; g.font = F(600, 28); g.fillText(l, x + 55 + wv, yy);
+    });
+  });
+  const blob = await new Promise(r => c.toBlob(r, 'image/png'));
+  const file = new File([blob], `nido-${sum.ws}.png`, { type: 'image/png' });
+  if (navigator.canShare?.({ files: [file] })) {
+    await navigator.share({ files: [file], title: 'Nuestra semana en Nido' }).catch(() => {});
+  } else {
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file.name; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+  }
 }
 
 function xpHelp() {
@@ -321,6 +557,12 @@ function viewTrain() {
     <p class="tiny muted">Plan orientativo: no sustituye a tu fisio, médico ni entrenador.</p>
   </section>
 
+  <div class="section-label">Recordatorios</div>
+  <section class="card">
+    <p class="small muted" style="margin-top:0">Crea eventos semanales en Google Calendar y te avisará con su notificación. Gratis y sin dar permisos a Nido. Puedes cambiar la hora antes de guardarlos.</p>
+    ${REMINDERS[u].map(r => `<a class="hist-row" href="${calendarLink(r)}" target="_blank" rel="noopener">${tile('calendar', 'var(--primary)', 'sm')}<span class="grow small"><b class="block">${esc(r.l)}</b><span class="tiny muted">${r.start}–${r.end}</span></span>${icon('chevron-right', { size: 16 })}</a>`).join('')}
+  </section>
+
   <div class="section-label">Historial</div>
   <section class="card">
     ${hist.length ? hist.map(s => `<button class="hist-row" data-action="edit-session" data-id="${s.id}">
@@ -364,8 +606,35 @@ function openLogger({ type, template, sub, session }) {
   };
   if (u === 'julio' && d.data.pain == null) d.data.pain = 0;
 
-  const w = openSheet('', { cls: 'tall' });
+  let rest = null;
+  const w = openSheet('', { cls: 'tall', onClose: () => stopRest() });
   const body = w.querySelector('.sheet-body');
+  const restBar = document.createElement('div');
+  restBar.className = 'rest-bar';
+  restBar.hidden = true;
+  w.appendChild(restBar);
+
+  function stopRest() { if (rest) clearInterval(rest.int); rest = null; restBar.hidden = true; }
+  function tickRest() {
+    if (!rest) return;
+    const left = Math.max(0, Math.ceil((rest.end - Date.now()) / 1000));
+    restBar.querySelector('[data-rt]').textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
+    restBar.querySelector('.rest-fill').style.width = `${100 - Math.round(left / rest.total * 100)}%`;
+    if (left <= 0) { stopRest(); restDone(); }
+  }
+  function startRest(sec) {
+    stopRest();
+    rest = { end: Date.now() + sec * 1000, total: sec, int: setInterval(tickRest, 250) };
+    restBar.hidden = false;
+    restBar.innerHTML = `<div class="rest-fill"></div><div class="rest-inner">${icon('timer', { size: 18 })}<span class="grow">Descanso <b data-rt class="num"></b></span>
+      <button class="btn sm soft" data-rest="15">+15 s</button><button class="btn sm outline" data-rest="skip">Saltar</button></div>`;
+    tickRest();
+    if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission().catch(() => {});
+  }
+  restBar.addEventListener('click', e => {
+    const b = e.target.closest('[data-rest]'); if (!b || !rest) return;
+    if (b.dataset.rest === 'skip') stopRest(); else { rest.end += 15000; rest.total += 15; tickRest(); }
+  });
 
   const setPath = (path, val) => {
     const keys = path.split('.');
@@ -389,10 +658,12 @@ function openLogger({ type, template, sub, session }) {
               ${e.target ? `<div class="tiny muted">Objetivo ${esc(e.target)}</div>` : ''}</div>
               <button class="icon-btn sm plain" data-rm-ex="${i}" aria-label="Quitar ejercicio">${icon('x', { size: 16 })}</button></div>
             ${last ? `<div class="last-time">Última vez (${fmtDate(last.date)}): ${last.sets.map(s => `${s.reps || '–'}×${s.kg || 0} kg`).join(' · ')}</div>` : ''}
-            <div class="set-head"><span>#</span><span>Reps</span><span>Kg</span><span></span></div>
+            ${(() => { const pg = progression(e, last); return pg ? `<div class="prog ${pg.type}">${icon(pg.type === 'up' ? 'trending-up' : 'target', { size: 13 })} ${esc(pg.text)}</div>` : ''; })()}
+            <div class="set-head"><span>#</span><span>Reps</span><span>Kg</span><span></span><span></span></div>
             <div class="sets">${e.sets.map((s, j) => `<div class="set-row"><span class="set-n">${j + 1}</span>
               <input type="number" inputmode="numeric" placeholder="0" data-f="data.exercises.${i}.sets.${j}.reps" value="${esc(s.reps)}">
               <input type="number" inputmode="decimal" step="0.5" placeholder="0" data-f="data.exercises.${i}.sets.${j}.kg" value="${esc(s.kg)}">
+              <button class="icon-btn sm set-done ${s.done ? 'on' : ''}" data-done="${i}.${j}" aria-label="Serie hecha">${icon('check', { size: 15 })}</button>
               <button class="icon-btn sm plain" data-rm-set="${i}.${j}" aria-label="Quitar serie">${icon('minus', { size: 16 })}</button></div>`).join('')}</div>
             <button class="btn outline sm" data-add-set="${i}">${icon('plus', { size: 14 })} Serie</button>
           </div>`;
@@ -400,7 +671,7 @@ function openLogger({ type, template, sub, session }) {
         <button class="btn soft block" data-add-ex>${icon('plus', { size: 16 })} Añadir ejercicio</button>
         <label class="field"><span>Duración (min, opcional)</span><input type="number" inputmode="numeric" data-f="data.min" value="${esc(dd.min)}"></label>`;
     } else if (d.type === 'basket') {
-      fields = `<div class="seg">${['entreno', 'partido'].map(x => `<button class="${dd.sub === x ? 'on' : ''}" data-set="data.sub" data-val="${x}">${icon(x === 'partido' ? 'trophy' : 'basketball', { size: 16 })} ${x}</button>`).join('')}</div>
+      fields = `<div class="seg">${['entreno', 'partido'].map(x => `<button class="${dd.sub === x ? 'on' : ''}" data-set="data.sub" data-val="${x}">${icon(x === 'partido' ? 'trophy' : 'basketball', { size: 16 })} ${x === 'partido' ? 'Partido' : 'Entreno'}</button>`).join('')}</div>
         <label class="field"><span>Minutos</span><input type="number" inputmode="numeric" data-f="data.min" value="${esc(dd.min)}"></label>
         ${dd.sub === 'partido' ? `<label class="field"><span>Puntos anotados (opcional)</span><input type="number" inputmode="numeric" data-f="data.points" value="${esc(dd.points)}"></label>` : ''}`;
     } else if (d.type === 'run') {
@@ -410,7 +681,7 @@ function openLogger({ type, template, sub, session }) {
     } else {
       fields = `<div class="chips">${CARDIO_KINDS.map(k => `<button class="chip ${dd.kind === k ? 'on' : ''}" data-set="data.kind" data-val="${k}">${k}</button>`).join('')}</div>
         <label class="field"><span>Minutos</span><input type="number" inputmode="numeric" data-f="data.min" value="${esc(dd.min)}"></label>
-        <div class="seg">${['suave', 'media', 'fuerte'].map(x => `<button class="${dd.intensity === x ? 'on' : ''}" data-set="data.intensity" data-val="${x}">${x}</button>`).join('')}</div>`;
+        <div class="seg">${['suave', 'media', 'fuerte'].map(x => `<button class="${dd.intensity === x ? 'on' : ''}" data-set="data.intensity" data-val="${x}">${x.charAt(0).toUpperCase() + x.slice(1)}</button>`).join('')}</div>`;
     }
     const pain = u === 'julio' ? `<label class="field"><span>Molestia en el isquio: <b class="pain-v">${dd.pain}</b>/10</span>
       <input type="range" min="0" max="10" step="1" data-f="data.pain" data-live="pain" value="${dd.pain}"></label>` : '';
@@ -447,6 +718,13 @@ function openLogger({ type, template, sub, session }) {
     if (!b) return;
     if (b.dataset.set) { setPath(b.dataset.set, b.dataset.val); if (b.dataset.set === 'data.sub') d.data.min = b.dataset.val === 'partido' ? 90 : 120; draw(); }
     else if (b.dataset.addSet != null) { const ex = d.data.exercises[b.dataset.addSet]; const prev = ex.sets[ex.sets.length - 1] || { reps: '', kg: '' }; ex.sets.push({ ...prev }); draw(); }
+    else if (b.dataset.done) {
+      const [i, j] = b.dataset.done.split('.').map(Number);
+      const ex = d.data.exercises[i], st = ex.sets[j];
+      st.done = !st.done;
+      b.classList.toggle('on', st.done);
+      if (st.done) startRest(restFor(ex));
+    }
     else if (b.dataset.rmSet) { const [i, j] = b.dataset.rmSet.split('.').map(Number); d.data.exercises[i].sets.splice(j, 1); draw(); }
     else if (b.dataset.rmEx != null) { d.data.exercises.splice(Number(b.dataset.rmEx), 1); draw(); }
     else if (b.hasAttribute('data-add-ex')) { d.data.exercises.push({ name: '', slug: '', target: '', sets: [{ reps: '', kg: '' }] }); draw(); body.querySelectorAll('.ex-name')[d.data.exercises.length - 1]?.focus(); }
@@ -454,15 +732,38 @@ function openLogger({ type, template, sub, session }) {
       if (await confirmSheet('¿Borrar esta sesión? La mascota perderá los XP que le dio.', 'Borrar')) { remove('sessions', session.id); closeSheet(w); toast('Sesión borrada', 2000, 'trash-2'); afterChange(); }
     } else if (b.hasAttribute('data-save')) {
       const data = JSON.parse(JSON.stringify(d.data));
-      if (data.exercises) data.exercises = data.exercises.filter(x => x.name.trim()).map(x => ({ ...x, name: x.name.trim(), sets: x.sets.filter(s => s.reps !== '' || s.kg !== '') }));
+      if (data.exercises) data.exercises = data.exercises.filter(x => x.name.trim()).map(x => ({ ...x, name: x.name.trim(), sets: x.sets.filter(s => s.reps !== '' || s.kg !== '').map(({ reps, kg }) => ({ reps, kg })) }));
       if (!d.date || d.date > today()) { toast('Fecha no válida', 2000, 'triangle-alert'); return; }
-      if (session) update('sessions', session.id, { date: d.date, notes: d.notes, data });
-      else add('sessions', { user: u, type: d.type, date: d.date, notes: d.notes, data });
+      const rec = session ? update('sessions', session.id, { date: d.date, notes: d.notes, data })
+        : add('sessions', { user: u, type: d.type, date: d.date, notes: d.notes, data });
       closeSheet(w);
+      const prs = prsInSession(rec);
+      if (prs.length) setTimeout(() => { toast(`Nuevo récord: ${esc(prs[0].name)} · ${fmtNum(prs[0].kg, 1)} kg${prs.length > 1 ? ` (+${prs.length - 1} más)` : ''}`, 3200, 'trophy'); confetti(); }, session ? 0 : 1200);
       if (!session) celebrate(u);
       afterChange();
     }
   });
+}
+
+let audioCtx = null;
+/** Fin del descanso: vibración, pitido y notificación si la app está en segundo plano. */
+function restDone() {
+  navigator.vibrate?.([250, 120, 250, 120, 400]);
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    [0, 0.25, 0.5].forEach((t, i) => {
+      const o = audioCtx.createOscillator(), gn = audioCtx.createGain();
+      o.frequency.value = i === 2 ? 1320 : 880; o.connect(gn); gn.connect(audioCtx.destination);
+      gn.gain.setValueAtTime(0.0001, audioCtx.currentTime + t);
+      gn.gain.exponentialRampToValueAtTime(0.25, audioCtx.currentTime + t + 0.02);
+      gn.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + t + 0.2);
+      o.start(audioCtx.currentTime + t); o.stop(audioCtx.currentTime + t + 0.22);
+    });
+  } catch { /* sin audio */ }
+  if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
+    navigator.serviceWorker?.ready.then(r => r.showNotification('Nido', { body: '¡Descanso terminado! A por la siguiente serie.', icon: 'icons/icon-192.png', tag: 'rest', vibrate: [250, 120, 250] })).catch(() => {});
+  }
+  toast('¡Descanso terminado! A por la siguiente serie', 2600, 'timer');
 }
 
 function celebrate(u) {
@@ -495,6 +796,7 @@ function viewFood() {
   const target = kcalTarget(usr);
   const entries = list('foods', f => f.user === u && f.date === foodDate);
   const total = entries.reduce((a, f) => a + (Number(f.kcal) || 0), 0);
+  const prot = entries.reduce((a, f) => a + (Number(f.protein) || 0), 0);
   const left = target - total;
   const [lo, hi] = GOALS[usr.goal].range;
   const good = entries.length >= 2 && inTarget(usr, total);
@@ -518,6 +820,7 @@ function viewFood() {
         <div><span>Consumido</span><b>${fmtNum(Math.round(total))}</b></div>
         <div><span>Objetivo</span><b>${fmtNum(target)}</b></div>
         <div><span>Rango</span><b class="small nowrap">${fmtNum(Math.round(lo * target))}–${fmtNum(Math.round(hi * target))}</b></div>
+        ${usr.showProtein ? `<div class="prot-row"><span>Proteína</span><b class="small nowrap">${fmtNum(Math.round(prot))} / ${fmtNum(usr.proteinTarget)} g</b><i style="--p:${Math.min(100, Math.round(prot / (usr.proteinTarget || 1) * 100))}%"></i></div>` : ''}
       </div>
     </div>
     ${good ? `<div class="status-line ok">${icon('check', { size: 16 })} Día dentro del objetivo · +${XP.food} XP para la mascota</div>`
@@ -555,7 +858,7 @@ function userFoodMemory(u) {
     const k = f.name.toLowerCase();
     if (seen.has(k)) continue;
     seen.add(k);
-    rec.push({ name: f.name, kcal100: f.kcal100 || null, portion: f.grams || null, kcalFixed: f.kcal100 ? null : f.kcal, portionName: f.grams ? 'última vez' : '', recent: true });
+    rec.push({ name: f.name, kcal100: f.kcal100 || null, prot100: f.prot100 ?? null, portion: f.grams || null, kcalFixed: f.kcal100 ? null : f.kcal, protFixed: f.kcal100 ? null : (f.protein ?? null), portionName: f.grams ? 'última vez' : '', recent: true });
     if (rec.length >= 15) break;
   }
   return { favs, rec };
@@ -610,8 +913,10 @@ function openAddFood(meal) {
       content = `<label class="field"><span>¿Qué has comido?</span><input data-m-name placeholder="Ej: Bocadillo de jamón"></label>
         <div class="row gap"><label class="field grow"><span>Calorías totales</span><input type="number" inputmode="numeric" data-m-kcal placeholder="kcal"></label>
         <label class="field grow"><span>Gramos (opcional)</span><input type="number" inputmode="numeric" data-m-g></label></div>
-        <label class="check"><input type="checkbox" data-m-fav> Guardar en favoritas</label>
+        <label class="field"><span>Proteína (g, opcional)</span><input type="number" inputmode="decimal" data-m-p></label>
         ${mealSelect()}
+        ${shareBox('kcal', '')}
+        <label class="check"><input type="checkbox" data-m-fav> Guardar en favoritas</label>
         <button class="btn primary block" data-m-save>${icon('plus', { size: 16 })} Añadir</button>`;
     } else if (mode === 'scan') {
       content = `<div class="scan-box"><video playsinline muted></video><div class="scan-line"></div></div><p class="small muted center scan-msg">Apunta al código de barras</p>`;
@@ -635,19 +940,34 @@ function openAddFood(meal) {
         <div class="chips">${f.portion && f.portion !== 100 ? `<button class="chip" data-g="${f.portion}">${esc(f.portionName || 'ración')} · ${fmtNum(f.portion)} g</button>` : ''}
           <button class="chip" data-g="100">100 g</button>${f.portion ? `<button class="chip" data-g="${Math.round(f.portion / 2)}">Media · ${fmtNum(Math.round(f.portion / 2))} g</button><button class="chip" data-g="${f.portion * 2}">Doble · ${fmtNum(f.portion * 2)} g</button>` : ''}</div>
         <label class="field"><span>Gramos</span><input type="number" inputmode="decimal" value="${g0}" data-grams></label>`}
-      <p class="big-kcal"><b data-kcal-out class="num">0</b> kcal</p>
+      <p class="big-kcal"><b data-kcal-out class="num">0</b> kcal<span class="prot-out tiny muted block"></span></p>
       ${mealSelect()}
+      ${shareBox(fixed ? 'qty' : 'grams', fixed ? 1 : g0)}
       ${f.fav ? '' : '<label class="check"><input type="checkbox" data-fav> Guardar en favoritas</label>'}
       <button class="btn primary block" data-add>${icon('plus', { size: 16 })} Añadir</button>`;
     updateKcal();
   }
 
+  const oName = esc(U(other(u)).name);
+  function shareBox(kind, def) {
+    const label = kind === 'qty' ? `Raciones de ${oName}` : kind === 'kcal' ? `Calorías de ${oName}` : `Gramos de ${oName}`;
+    return `<label class="check"><input type="checkbox" data-share> También para ${oName}</label>
+      <label class="field" data-share-box hidden><span>${label}</span><input type="number" inputmode="decimal" value="${def}" data-share-v data-kind="${kind}"></label>`;
+  }
+  function calcProt(f = picked, amount) {
+    if (!f) return null;
+    if (f.kcal100 == null) { const pf = f.protFixed; return pf != null ? (amount ?? (Number(body.querySelector('[data-qty]')?.value) || 0)) * pf : null; }
+    return f.prot100 != null ? (amount ?? (Number(body.querySelector('[data-grams]')?.value) || 0)) * f.prot100 / 100 : null;
+  }
   function calcKcal() {
     const f = picked;
     if (f.kcal100 == null) return (Number(body.querySelector('[data-qty]')?.value) || 0) * (f.kcalFixed ?? f.kcal);
     return (Number(body.querySelector('[data-grams]')?.value) || 0) * f.kcal100 / 100;
   }
-  function updateKcal() { const o = body.querySelector('[data-kcal-out]'); if (o) o.textContent = fmtNum(Math.round(calcKcal())); }
+  function updateKcal() {
+    const o = body.querySelector('[data-kcal-out]'); if (o) o.textContent = fmtNum(Math.round(calcKcal()));
+    const pr = body.querySelector('.prot-out'); if (pr) { const v = calcProt(); pr.textContent = v != null ? `${fmtNum(v, 1)} g de proteína` : ''; }
+  }
 
   async function runOFF() {
     if (!q.trim()) return;
@@ -690,12 +1010,21 @@ function openAddFood(meal) {
     }
   }
 
-  function saveFood({ name, kcal, grams, kcal100, mealId, fav, favData }) {
-    add('foods', { user: u, date: foodDate, meal: mealId, name, kcal: Math.round(kcal), grams: grams || null, kcal100: kcal100 ?? null });
+  function saveFood({ name, kcal, grams, kcal100, prot100, protein, mealId, fav, favData, share }) {
+    const r1 = v => v == null ? null : Math.round(v * 10) / 10;
+    add('foods', { user: u, date: foodDate, meal: mealId, name, kcal: Math.round(kcal), grams: grams || null, kcal100: kcal100 ?? null, prot100: prot100 ?? null, protein: r1(protein) });
+    if (share && share.kcal > 0) add('foods', { user: other(u), date: foodDate, meal: mealId, name, kcal: Math.round(share.kcal), grams: share.grams || null, kcal100: kcal100 ?? null, prot100: prot100 ?? null, protein: r1(share.protein) });
     if (fav && !list('favorites', x => x.user === u && x.name.toLowerCase() === name.toLowerCase()).length) add('favorites', { user: u, ...favData });
     closeSheet(w);
-    toast(`${esc(name)} · ${fmtNum(Math.round(kcal))} kcal`);
+    toast(`${esc(name)} · ${fmtNum(Math.round(kcal))} kcal${share ? ` (también para ${oName})` : ''}`);
     afterChange();
+  }
+  function readShare(f) {
+    if (!body.querySelector('[data-share]')?.checked) return null;
+    const inp = body.querySelector('[data-share-v]'); const v = Number(inp.value) || 0;
+    if (inp.dataset.kind === 'kcal') return { kcal: v, grams: null, protein: null };
+    if (inp.dataset.kind === 'qty') return { kcal: v * (f.kcalFixed ?? f.kcal), grams: null, protein: calcProt(f, v) };
+    return { kcal: v * f.kcal100 / 100, grams: v, protein: calcProt(f, v) };
   }
 
   body.addEventListener('submit', e => { e.preventDefault(); if (e.target.matches('[data-search]')) { offResults = null; runOFF(); } });
@@ -707,7 +1036,9 @@ function openAddFood(meal) {
       const inp = body.querySelector('[data-q]'); inp.focus(); inp.setSelectionRange(pos, pos);
     }
     if (e.target.matches('[data-grams],[data-qty]')) updateKcal();
+    if (e.target.matches('[data-share]')) body.querySelector('[data-share-box]').hidden = !e.target.checked;
   });
+  body.addEventListener('change', e => { if (e.target.matches('[data-share]')) body.querySelector('[data-share-box]').hidden = !e.target.checked; });
   body.addEventListener('click', e => {
     const b = e.target.closest('button');
     if (!b) return;
@@ -720,20 +1051,27 @@ function openAddFood(meal) {
       const kcal = calcKcal();
       if (!(kcal > 0)) { toast('Indica una cantidad', 2000, 'triangle-alert'); return; }
       const grams = f.kcal100 != null ? Number(body.querySelector('[data-grams]').value) : null;
+      const qty = f.kcal100 == null ? Number(body.querySelector('[data-qty]').value) || 1 : null;
       saveFood({
-        name: f.name, kcal, grams, kcal100: f.kcal100, mealId: body.querySelector('[data-meal]').value,
-        fav: body.querySelector('[data-fav]')?.checked,
-        favData: { name: f.name, kcal100: f.kcal100 ?? null, kcalFixed: f.kcal100 == null ? (f.kcalFixed ?? f.kcal) : null, portion: grams || f.portion || null, portionName: f.portionName || '' },
+        name: f.name, kcal, grams, kcal100: f.kcal100, prot100: f.prot100 ?? null, protein: calcProt(), mealId: body.querySelector('[data-meal]').value,
+        fav: body.querySelector('[data-fav]')?.checked, share: readShare(f),
+        favData: { name: f.name, kcal100: f.kcal100 ?? null, prot100: f.prot100 ?? null, kcalFixed: f.kcal100 == null ? (f.kcalFixed ?? f.kcal) : null, protFixed: f.kcal100 == null ? (f.protFixed ?? null) : null, portion: grams || f.portion || null, portionName: f.portionName || '' },
       });
+      void qty;
     } else if (b.hasAttribute('data-m-save')) {
       const name = body.querySelector('[data-m-name]').value.trim();
       const kcal = Number(body.querySelector('[data-m-kcal]').value);
       const grams = Number(body.querySelector('[data-m-g]').value) || null;
       if (!name || !(kcal > 0)) { toast('Pon nombre y calorías', 2000, 'triangle-alert'); return; }
+      const pv = body.querySelector('[data-m-p]').value;
+      const protein = pv === '' ? null : Number(pv);
+      const prot100 = protein != null && grams ? Math.round(protein / grams * 1000) / 10 : null;
+      const share = readShare({ kcal });
+      if (share && protein != null) share.protein = protein * share.kcal / kcal;
       saveFood({
-        name, kcal, grams, kcal100: grams ? Math.round(kcal / grams * 100) : null, mealId: body.querySelector('[data-meal]').value,
-        fav: body.querySelector('[data-m-fav]').checked,
-        favData: grams ? { name, kcal100: Math.round(kcal / grams * 100), portion: grams, portionName: 'ración' } : { name, kcal100: null, kcalFixed: kcal, portion: null, portionName: '' },
+        name, kcal, grams, kcal100: grams ? Math.round(kcal / grams * 100) : null, prot100, protein, mealId: body.querySelector('[data-meal]').value,
+        fav: body.querySelector('[data-m-fav]').checked, share,
+        favData: grams ? { name, kcal100: Math.round(kcal / grams * 100), prot100, portion: grams, portionName: 'ración' } : { name, kcal100: null, kcalFixed: kcal, protFixed: protein, portion: null, portionName: '' },
       });
     }
   });
@@ -756,13 +1094,14 @@ function openFoodEntry(id) {
     const t = e.target.closest('button'); if (!t) return;
     if (t.hasAttribute('data-del')) { remove('foods', f.id); closeSheet(w); afterChange(); }
     else if (t.hasAttribute('data-save')) {
-      update('foods', f.id, { kcal: Number(b.querySelector('[data-k]').value) || 0, grams: Number(b.querySelector('[data-g]')?.value) || f.grams, meal: b.querySelector('[data-meal]').value });
+      const g = Number(b.querySelector('[data-g]')?.value) || f.grams;
+      update('foods', f.id, { kcal: Number(b.querySelector('[data-k]').value) || 0, grams: g, meal: b.querySelector('[data-meal]').value, protein: f.prot100 != null && g ? Math.round(f.prot100 * g / 10) / 10 : f.protein ?? null });
       closeSheet(w); afterChange();
     } else if (t.hasAttribute('data-fav')) {
-      add('favorites', { user: f.user, name: f.name, kcal100: f.kcal100 ?? null, kcalFixed: f.kcal100 ? null : f.kcal, portion: f.grams, portionName: f.grams ? 'ración' : '' });
+      add('favorites', { user: f.user, name: f.name, kcal100: f.kcal100 ?? null, prot100: f.prot100 ?? null, kcalFixed: f.kcal100 ? null : f.kcal, protFixed: f.kcal100 ? null : (f.protein ?? null), portion: f.grams, portionName: f.grams ? 'ración' : '' });
       t.innerHTML = `${icon('star', { size: 16 })} En favoritas`; t.disabled = true;
     } else if (t.hasAttribute('data-dup')) {
-      add('foods', { user: f.user, date: today(), meal: f.meal, name: f.name, kcal: f.kcal, grams: f.grams, kcal100: f.kcal100 });
+      add('foods', { user: f.user, date: today(), meal: f.meal, name: f.name, kcal: f.kcal, grams: f.grams, kcal100: f.kcal100, prot100: f.prot100 ?? null, protein: f.protein ?? null });
       closeSheet(w); toast('Añadido a hoy'); afterChange();
     }
   });
@@ -826,6 +1165,7 @@ function viewProgress() {
     <div class="kpi">${tile('heart-handshake', 'var(--c-cardio)')}<div><b class="num">${teamDays}</b><span>días juntos</span></div></div>
     <div class="kpi">${tile('flame', 'var(--fire)')}<div><b class="num">${teamWeekStreak()}</b><span>sem. perfectas</span></div></div>
   </div>
+  <button class="btn soft block" data-action="week-summary">${icon('calendar-check', { size: 16 })} Resumen semanal para compartir</button>
 
   <section class="card">
     <div class="card-head"><div class="row gap">${tile('scale', usr.color, 'sm')}<h3>Peso corporal</h3></div><button class="btn soft sm" data-action="add-weight">${icon('plus', { size: 14 })} Registrar</button></div>
@@ -841,6 +1181,12 @@ function viewProgress() {
     ${jumps.length ? `<div class="big-stat"><b class="num">${fmtNum(bestJ, 1)}</b><span class="muted small">cm mejor marca</span>${jumps.length >= 2 ? `<span class="delta down">+${fmtNum(bestJ - Number(jumps[0].cm), 1)} cm</span>` : ''}</div>
       ${lineChart(jumps.map(j => ({ date: j.date, v: Number(j.cm) })), { color: 'var(--c-basket)' })}`
       : '<p class="small muted">De lado junto a una pared, marca tu alcance con el brazo estirado y salta tocando lo más alto posible. La diferencia en cm es tu salto. Mide cada 3–4 semanas: el mejor de 3 intentos.</p>'}
+  </section>` : ''}
+
+  ${u === 'julio' && painSeries().length >= 2 ? `<section class="card">
+    <div class="card-head"><div class="row gap">${tile('activity', 'var(--bad)', 'sm')}<h3>Molestia del isquio</h3></div><span class="sub">0–10 por sesión</span></div>
+    ${painAlert() ? `<div class="warn">${icon('triangle-alert', { size: 16 })}<span>${esc(painAlert().text)}</span></div>` : '<div class="status-line ok">' + icon('check', { size: 16 }) + ' Sin señales de alarma en las últimas dos semanas</div>'}
+    ${lineChart(painSeries().slice(-20), { color: 'var(--bad)' })}
   </section>` : ''}
 
   ${prs.length ? `<section class="card"><div class="card-head"><div class="row gap">${tile('trophy', 'var(--gold)', 'sm')}<h3>Mejores marcas</h3></div></div>
@@ -891,9 +1237,10 @@ function openShop() {
       ${Object.entries(slots).map(([slot, l]) => `<div class="section-label" style="margin-left:0">${l}</div><div class="shop-grid">${ITEMS.filter(i => i.slot === slot).map(it => {
         const owned = pet.owned.includes(it.id);
         const on = pet.equipped[slot] === it.id;
-        return `<button class="shop-item ${on ? 'on' : ''} ${owned ? 'owned' : ''}" data-item="${it.id}">
+        const locked = it.exclusive && !owned;
+        return `<button class="shop-item ${on ? 'on' : ''} ${owned ? 'owned' : ''} ${locked ? 'locked' : ''}" data-item="${it.id}">
           <div class="mini">${itemPreview(it, pet.color, st.index)}</div><b>${esc(it.l)}</b>
-          <span class="price">${on ? `${icon('check', { size: 13 })} Puesto` : owned ? 'Poner' : `${icon('coins', { size: 13 })} ${it.cost}`}</span></button>`;
+          <span class="price">${on ? `${icon('check', { size: 13 })} Puesto` : owned ? 'Poner' : locked ? `${icon('award', { size: 13 })} Cofre` : `${icon('coins', { size: 13 })} ${it.cost}`}</span></button>`;
       }).join('')}</div>`).join('')}
       <button class="btn primary block" data-close>Listo</button>`;
   }
@@ -902,6 +1249,7 @@ function openShop() {
     const it = ITEMS.find(i => i.id === b.dataset.item);
     const pet = S().profile.pet;
     const { xp } = computeXP();
+    if (it.exclusive && !pet.owned.includes(it.id)) { toast('Exclusivo: se consigue en el cofre del reto semanal', 2600, 'award'); return; }
     if (pet.owned.includes(it.id)) {
       updateProfile(p => { p.pet.equipped[it.slot] = p.pet.equipped[it.slot] === it.id ? null : it.id; });
     } else {
@@ -934,6 +1282,8 @@ function openSettings() {
       <label class="field"><span>Objetivo</span><select data-k="goal">${Object.entries(GOALS).map(([k, g]) => `<option value="${k}" ${k === x.goal ? 'selected' : ''}>${g.l}</option>`).join('')}</select></label>
       <div class="row gap"><label class="field grow"><span>Kcal manual (0 = auto)</span><input type="number" data-k="kcalOverride" value="${x.kcalOverride || 0}"></label>
         <label class="field grow"><span>Sesiones/semana</span><input type="number" data-k="weeklyGoal" value="${x.weeklyGoal}"></label></div>
+      <div class="row gap"><label class="check grow"><input type="checkbox" data-k="showProtein" ${x.showProtein ? 'checked' : ''}> Contar proteína</label>
+        <label class="field grow"><span>Proteína/día (g)</span><input type="number" data-k="proteinTarget" value="${x.proteinTarget || 0}"></label></div>
       <div class="status-line">${icon('target', { size: 16 })} Objetivo calculado: <b data-calc class="num">${fmtNum(computedTarget(x))}</b> kcal/día</div>
     </div>`;
   }
@@ -974,7 +1324,7 @@ function openSettings() {
     const x = { ...S().profile.users[card.dataset.user] };
     card.querySelectorAll('[data-k]').forEach(i => {
       const k = i.dataset.k;
-      x[k] = ['name', 'sex', 'goal'].includes(k) ? i.value : Number(i.value);
+      x[k] = i.type === 'checkbox' ? i.checked : ['name', 'sex', 'goal'].includes(k) ? i.value : Number(i.value);
     });
     return x;
   }
@@ -1114,7 +1464,11 @@ function chooseUser() {
 // Acciones globales
 // =====================================================================
 const actions = {
-  'switch-user': () => { if (!cu()) return chooseUser(); setCurrentUser(other(cu())); render(); toast(`Hola, ${esc(U().name)}`, 1500, 'user'); },
+  cheer: el => openCheer(el.dataset.id),
+  'cheers-seen': () => { list('cheers', c => c.to === cu() && !c.seen).forEach(c => update('cheers', c.id, { seen: true })); rerender(); },
+  'open-chest': el => openChest(el.dataset.ws),
+  'week-summary': () => openSummary(),
+  'switch-user': () => { if (!cu()) return chooseUser(); setCurrentUser(other(cu())); render(); const n = list('cheers', c => c.to === cu() && !c.seen).length; toast(n ? `Hola, ${esc(U().name)} · tienes ${n} ánimo${n > 1 ? 's' : ''}` : `Hola, ${esc(U().name)}`, 1800, n ? 'sparkles' : 'user'); },
   'open-settings': () => openSettings(),
   shop: () => openShop(),
   'xp-help': () => xpHelp(),

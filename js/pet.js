@@ -16,7 +16,17 @@ export const ITEMS = [
   { id: 'gym', slot: 'bg', l: 'Fondo: gimnasio', cost: 120 },
   { id: 'playa', slot: 'bg', l: 'Fondo: playa', cost: 150 },
   { id: 'noche', slot: 'bg', l: 'Fondo: noche estrellada', cost: 200 },
+  // Exclusivos: solo salen en los cofres del reto semanal
+  { id: 'fiesta', slot: 'head', l: 'Gorro de fiesta', exclusive: true },
+  { id: 'halo', slot: 'head', l: 'Aureola', exclusive: true },
+  { id: 'auriculares', slot: 'head', l: 'Auriculares', exclusive: true },
+  { id: 'estrellas', slot: 'face', l: 'Gafas de estrella', exclusive: true },
+  { id: 'trofeo', slot: 'hand', l: 'Trofeo', exclusive: true },
+  { id: 'batido', slot: 'hand', l: 'Batido de proteínas', exclusive: true },
+  { id: 'aurora', slot: 'bg', l: 'Fondo: aurora boreal', exclusive: true },
+  { id: 'atardecer', slot: 'bg', l: 'Fondo: atardecer', exclusive: true },
 ];
+export const EXCLUSIVES = ITEMS.filter(i => i.exclusive).map(i => i.id);
 
 const GEOM = [
   null, // huevo
@@ -59,6 +69,19 @@ function background(id) {
       ${[[20, 30], [50, 18], [90, 40], [130, 22], [170, 52], [30, 80], [150, 90], [110, 70], [70, 95]].map(([x, y], i) => `<circle cx="${x}" cy="${y}" r="${i % 3 ? 1.2 : 2}" fill="#fff" class="twinkle" style="animation-delay:${i * 0.4}s"/>`).join('')}
       <circle cx="160" cy="38" r="15" fill="#fff4c2"/><circle cx="167" cy="33" r="13" fill="#1f2547"/>
       <rect y="155" width="200" height="45" fill="#2d3561"/>`;
+    case 'aurora': return `
+      <defs><linearGradient id="aur" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0b1330"/><stop offset="1" stop-color="#1b2550"/></linearGradient></defs>
+      <rect width="200" height="200" fill="url(#aur)"/>
+      <path class="twinkle" d="M-10 70 Q40 30 90 60 T210 40 L210 80 Q150 100 100 85 T-10 105 Z" fill="#3ff2a6" opacity=".35"/>
+      <path class="twinkle" style="animation-delay:.8s" d="M-10 50 Q60 20 110 45 T210 25 L210 55 Q150 70 100 60 T-10 75 Z" fill="#a46bff" opacity=".3"/>
+      ${[[20, 20], [60, 12], [140, 18], [180, 40], [100, 28]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="1.3" fill="#fff"/>`).join('')}
+      <path d="M0 160 L40 135 L75 158 L110 130 L150 155 L200 138 L200 200 L0 200 Z" fill="#101833"/>`;
+    case 'atardecer': return `
+      <defs><linearGradient id="sun" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff9a76"/><stop offset=".6" stop-color="#ffcf8b"/><stop offset="1" stop-color="#ffe7c2"/></linearGradient></defs>
+      <rect width="200" height="200" fill="url(#sun)"/>
+      <circle cx="100" cy="140" r="38" fill="#fff2c9" opacity=".9"/>
+      <path d="M0 150 Q50 128 100 148 T200 140 L200 200 L0 200 Z" fill="#f08a6c"/>
+      <path d="M0 168 Q60 150 120 166 T200 160 L200 200 L0 200 Z" fill="#d9705a"/>`;
     default: return `
       <defs><radialGradient id="bgd" cx=".5" cy=".4" r=".75"><stop offset="0" style="stop-color:var(--pet-bg-1)"/><stop offset="1" style="stop-color:var(--pet-bg-2)"/></radialGradient></defs>
       <rect width="200" height="200" fill="url(#bgd)"/>
@@ -106,11 +129,16 @@ function face(g, mood) {
       mouth = `<path d="M${100 - r} ${mY + r * 0.6} Q100 ${mY - r * 0.6} ${100 + r} ${mY + r * 0.6}" fill="none" stroke="${ink}" stroke-width="3" stroke-linecap="round"/>`;
       extra = `<path class="tear" d="M${R + r * 0.6} ${y + r} q -3 6 0 9 q 3 -3 0 -9 Z" fill="#7cc4ff"/>`;
       break;
+    case 'dormida':
+      eyes = [L, R].map(x => `<path d="M${x - r} ${y - 1} Q${x} ${y + r * 1.1} ${x + r} ${y - 1}" fill="none" stroke="${ink}" stroke-width="3" stroke-linecap="round"/>`).join('');
+      mouth = `<ellipse cx="100" cy="${mY + 1}" rx="${r * 0.35}" ry="${r * 0.45}" fill="${ink}" opacity=".7"/>`;
+      extra = `<g class="zzz" fill="#8b7fff" font-family="Jakarta, sans-serif" font-weight="800"><text x="138" y="70" font-size="16">z</text><text x="150" y="54" font-size="12">z</text><text x="160" y="42" font-size="9">z</text></g>`;
+      break;
     default:
       eyes = openEye(L) + openEye(R);
       mouth = `<path d="M${100 - r * 0.6} ${mY} Q100 ${mY + r * 0.5} ${100 + r * 0.6} ${mY}" fill="none" stroke="${ink}" stroke-width="3" stroke-linecap="round"/>`;
   }
-  const blush = mood === 'triste' ? '' : [L - r * 0.9, R + r * 0.9].map(x => `<ellipse cx="${x}" cy="${y + r * 1.6}" rx="${r * 0.9}" ry="${r * 0.55}" fill="#ff8fa3" opacity=".55"/>`).join('');
+  const blush = mood === 'triste' || mood === 'dormida' ? '' : [L - r * 0.9, R + r * 0.9].map(x => `<ellipse cx="${x}" cy="${y + r * 1.6}" rx="${r * 0.9}" ry="${r * 0.55}" fill="#ff8fa3" opacity=".55"/>`).join('');
   return eyes + blush + mouth + extra;
 }
 
@@ -201,6 +229,37 @@ function accessory(id, g) {
       const x = 100 + g.rx + 6, y = g.cy + g.ry * 0.2;
       return `<g class="hand-item" transform="rotate(-20 ${x} ${y})"><rect x="${x - 16}" y="${y - 3}" width="32" height="6" rx="2" fill="#666"/>
         <rect x="${x - 22}" y="${y - 11}" width="8" height="22" rx="2" fill="#333"/><rect x="${x + 14}" y="${y - 11}" width="8" height="22" rx="2" fill="#333"/></g>`;
+    }
+    case 'fiesta': {
+      const x = 100 + g.rx * 0.15, y = top + 8;
+      return `<g transform="rotate(12 ${x} ${y})"><path d="M${x - 16} ${y} L${x} ${y - 40} L${x + 16} ${y} Z" fill="#ff5d8f" stroke="#c43a68" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M${x - 10} ${y - 12} L${x + 10} ${y - 12} M${x - 5} ${y - 26} L${x + 5} ${y - 26}" stroke="#ffd166" stroke-width="4" stroke-linecap="round"/>
+        <circle cx="${x}" cy="${y - 41}" r="5" fill="#ffd166"/></g>`;
+    }
+    case 'halo':
+      return `<ellipse class="twinkle" cx="100" cy="${top - 14}" rx="${g.rx * 0.55}" ry="7" fill="none" stroke="#ffd166" stroke-width="5"/>`;
+    case 'auriculares': {
+      const y = g.eyeY - g.eyeR, w = halfWidthAt(g, y) + 4;
+      return `<path d="M${100 - w} ${y} C${100 - w} ${top - 22} ${100 + w} ${top - 22} ${100 + w} ${y}" fill="none" stroke="#2b2f3a" stroke-width="6" stroke-linecap="round"/>
+        <rect x="${100 - w - 9}" y="${y - 6}" width="16" height="24" rx="7" fill="#6d5efc" stroke="#2b2f3a" stroke-width="2.5"/>
+        <rect x="${100 + w - 7}" y="${y - 6}" width="16" height="24" rx="7" fill="#6d5efc" stroke="#2b2f3a" stroke-width="2.5"/>`;
+    }
+    case 'estrellas': {
+      const r = g.eyeR * 1.9;
+      const star = cx => { let d = ''; for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? r * 0.48 : r; d += `${i ? 'L' : 'M'}${(cx + rr * Math.cos(a)).toFixed(1)} ${(g.eyeY + rr * Math.sin(a)).toFixed(1)} `; } return `<path d="${d}Z" fill="#ff7ab6" fill-opacity=".85" stroke="#c43a68" stroke-width="2" stroke-linejoin="round"/>`; };
+      return star(100 - g.eyeDX) + star(100 + g.eyeDX) + `<path d="M${100 - g.eyeDX + r * 0.6} ${g.eyeY - 2} L${100 + g.eyeDX - r * 0.6} ${g.eyeY - 2}" stroke="#c43a68" stroke-width="2.5"/>`;
+    }
+    case 'trofeo': {
+      const x = 100 + g.rx + 8, y = g.cy + g.ry * 0.15;
+      return `<g class="hand-item"><path d="M${x - 11} ${y - 14} L${x + 11} ${y - 14} L${x + 9} ${y} Q${x} ${y + 8} ${x - 9} ${y} Z" fill="#ffd166" stroke="#c99a1e" stroke-width="2"/>
+        <path d="M${x - 11} ${y - 10} q -8 0 -6 7 q 2 4 7 3 M${x + 11} ${y - 10} q 8 0 6 7 q -2 4 -7 3" fill="none" stroke="#c99a1e" stroke-width="2"/>
+        <rect x="${x - 3}" y="${y + 4}" width="6" height="8" fill="#c99a1e"/><rect x="${x - 9}" y="${y + 12}" width="18" height="5" rx="1.5" fill="#8a6100"/></g>`;
+    }
+    case 'batido': {
+      const x = 100 + g.rx + 8, y = g.cy + g.ry * 0.1;
+      return `<g class="hand-item"><rect x="${x - 9}" y="${y - 14}" width="18" height="30" rx="4" fill="#fff" stroke="#9aa5b8" stroke-width="2"/>
+        <rect x="${x - 9}" y="${y - 2}" width="18" height="18" rx="3" fill="#c9a37a"/>
+        <rect x="${x - 10}" y="${y - 20}" width="20" height="7" rx="2" fill="#6d5efc"/><rect x="${x - 3}" y="${y - 25}" width="6" height="5" rx="1" fill="#2b2f3a"/></g>`;
     }
   }
   return '';

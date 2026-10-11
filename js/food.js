@@ -1,40 +1,40 @@
 // Alimentos: lista local de comida típica (funciona sin internet) + Open Food Facts (gratis).
 
-// [nombre, kcal por 100 g, ración típica en g, nombre de la ración]
+// [nombre, kcal por 100 g, ración típica en g, nombre de la ración, proteína por 100 g]
 const LOCAL = [
-  ['Arroz blanco cocido', 130, 150, 'plato'], ['Arroz integral cocido', 123, 150, 'plato'],
-  ['Pasta cocida', 158, 180, 'plato'], ['Pan blanco', 265, 60, 'rebanada grande'], ['Pan integral', 247, 60, 'rebanada grande'],
-  ['Tostada de pan de molde', 265, 30, 'rebanada'], ['Patata cocida', 87, 200, 'unidad'], ['Patatas fritas caseras', 312, 150, 'ración'],
-  ['Copos de avena', 379, 40, 'puñado'], ['Quinoa cocida', 120, 150, 'plato'], ['Cuscús cocido', 112, 150, 'plato'],
-  ['Pechuga de pollo a la plancha', 165, 150, 'filete'], ['Muslo de pollo asado', 209, 120, 'unidad'],
-  ['Pavo en lonchas', 104, 50, 'lonchas'], ['Ternera a la plancha', 217, 150, 'filete'], ['Carne picada mixta', 250, 125, 'ración'],
-  ['Lomo de cerdo plancha', 180, 150, 'filete'], ['Jamón serrano', 241, 30, 'lonchas'], ['Jamón cocido', 110, 40, 'lonchas'],
-  ['Chorizo', 455, 30, 'rodajas'], ['Salmón a la plancha', 208, 150, 'filete'], ['Merluza a la plancha', 90, 150, 'filete'],
-  ['Atún en lata al natural', 116, 56, 'lata'], ['Atún en aceite (escurrido)', 198, 56, 'lata'], ['Gambas cocidas', 99, 100, 'ración'],
-  ['Huevo', 143, 60, 'unidad'], ['Clara de huevo', 52, 33, 'unidad'], ['Tortilla de patatas', 190, 150, 'pincho grande'],
-  ['Tortilla francesa (2 huevos)', 154, 120, 'unidad'], ['Lentejas guisadas', 116, 300, 'plato'], ['Garbanzos cocidos', 164, 150, 'ración'],
-  ['Alubias cocidas', 127, 150, 'ración'], ['Hummus', 166, 50, 'ración'], ['Tofu', 76, 100, 'ración'],
-  ['Leche entera', 64, 250, 'vaso'], ['Leche semidesnatada', 46, 250, 'vaso'], ['Leche desnatada', 35, 250, 'vaso'],
-  ['Bebida de avena', 45, 250, 'vaso'], ['Yogur natural', 61, 125, 'unidad'], ['Yogur griego', 115, 125, 'unidad'],
-  ['Yogur proteico / skyr', 62, 150, 'unidad'], ['Queso fresco batido 0%', 46, 250, 'tarrina'], ['Queso fresco tipo Burgos', 174, 60, 'porción'],
-  ['Queso curado', 400, 30, 'cuñas'], ['Mozzarella', 280, 60, 'porción'], ['Proteína whey (polvo)', 380, 30, 'cacito'],
-  ['Plátano', 89, 120, 'unidad'], ['Manzana', 52, 180, 'unidad'], ['Naranja', 47, 180, 'unidad'], ['Fresas', 32, 150, 'bol'],
-  ['Uvas', 69, 120, 'racimo pequeño'], ['Kiwi', 61, 75, 'unidad'], ['Pera', 57, 170, 'unidad'], ['Sandía', 30, 300, 'tajada'],
-  ['Melón', 34, 250, 'tajada'], ['Arándanos', 57, 100, 'bol'], ['Aguacate', 160, 100, 'medio'],
-  ['Ensalada verde (sin aliñar)', 17, 150, 'plato'], ['Tomate', 18, 150, 'unidad'], ['Brócoli cocido', 35, 200, 'ración'],
-  ['Verduras a la plancha', 45, 200, 'ración'], ['Judías verdes cocidas', 31, 200, 'ración'], ['Espinacas cocidas', 23, 150, 'ración'],
-  ['Gazpacho', 45, 250, 'vaso'], ['Crema de verduras', 50, 300, 'plato'],
-  ['Aceite de oliva', 884, 10, 'cucharada'], ['Mantequilla', 717, 10, 'porción'], ['Mantequilla de cacahuete', 588, 15, 'cucharada'],
-  ['Almendras', 579, 30, 'puñado'], ['Nueces', 654, 30, 'puñado'], ['Chocolate negro 85%', 600, 20, 'onzas'],
-  ['Chocolate con leche', 535, 20, 'onzas'], ['Galletas María', 436, 30, '4 galletas'], ['Croissant', 406, 60, 'unidad'],
-  ['Magdalena', 450, 50, 'unidad'], ['Cereales de desayuno', 380, 40, 'bol'], ['Miel', 304, 15, 'cucharada'],
-  ['Pizza', 266, 300, 'media pizza'], ['Hamburguesa completa', 250, 220, 'unidad'], ['Kebab', 215, 350, 'unidad'],
-  ['Sushi (pieza)', 145, 30, 'pieza'], ['Paella', 160, 300, 'plato'], ['Croquetas', 220, 30, 'unidad'],
-  ['Patatas fritas de bolsa', 536, 40, 'bolsa pequeña'], ['Cerveza', 43, 330, 'caña/tercio'], ['Vino tinto', 85, 150, 'copa'],
-  ['Refresco de cola', 42, 330, 'lata'], ['Zumo de naranja', 45, 200, 'vaso'], ['Café con leche', 40, 200, 'taza'],
+  ['Arroz blanco cocido', 130, 150, 'plato', 2.7], ['Arroz integral cocido', 123, 150, 'plato', 2.6],
+  ['Pasta cocida', 158, 180, 'plato', 5.8], ['Pan blanco', 265, 60, 'rebanada grande', 9], ['Pan integral', 247, 60, 'rebanada grande', 10],
+  ['Tostada de pan de molde', 265, 30, 'rebanada', 8], ['Patata cocida', 87, 200, 'unidad', 1.9], ['Patatas fritas caseras', 312, 150, 'ración', 3.4],
+  ['Copos de avena', 379, 40, 'puñado', 13], ['Quinoa cocida', 120, 150, 'plato', 4.4], ['Cuscús cocido', 112, 150, 'plato', 3.8],
+  ['Pechuga de pollo a la plancha', 165, 150, 'filete', 31], ['Muslo de pollo asado', 209, 120, 'unidad', 26],
+  ['Pavo en lonchas', 104, 50, 'lonchas', 19], ['Ternera a la plancha', 217, 150, 'filete', 26], ['Carne picada mixta', 250, 125, 'ración', 17],
+  ['Lomo de cerdo plancha', 180, 150, 'filete', 27], ['Jamón serrano', 241, 30, 'lonchas', 31], ['Jamón cocido', 110, 40, 'lonchas', 18],
+  ['Chorizo', 455, 30, 'rodajas', 24], ['Salmón a la plancha', 208, 150, 'filete', 22], ['Merluza a la plancha', 90, 150, 'filete', 18],
+  ['Atún en lata al natural', 116, 56, 'lata', 26], ['Atún en aceite (escurrido)', 198, 56, 'lata', 29], ['Gambas cocidas', 99, 100, 'ración', 21],
+  ['Huevo', 143, 60, 'unidad', 12.6], ['Clara de huevo', 52, 33, 'unidad', 11], ['Tortilla de patatas', 190, 150, 'pincho grande', 7],
+  ['Tortilla francesa (2 huevos)', 154, 120, 'unidad', 11], ['Lentejas guisadas', 116, 300, 'plato', 7], ['Garbanzos cocidos', 164, 150, 'ración', 8.9],
+  ['Alubias cocidas', 127, 150, 'ración', 8.7], ['Hummus', 166, 50, 'ración', 7.9], ['Tofu', 76, 100, 'ración', 8],
+  ['Leche entera', 64, 250, 'vaso', 3.2], ['Leche semidesnatada', 46, 250, 'vaso', 3.3], ['Leche desnatada', 35, 250, 'vaso', 3.4],
+  ['Bebida de avena', 45, 250, 'vaso', 1], ['Yogur natural', 61, 125, 'unidad', 3.5], ['Yogur griego', 115, 125, 'unidad', 6],
+  ['Yogur proteico / skyr', 62, 150, 'unidad', 10], ['Queso fresco batido 0%', 46, 250, 'tarrina', 8], ['Queso fresco tipo Burgos', 174, 60, 'porción', 12],
+  ['Queso curado', 400, 30, 'cuñas', 32], ['Mozzarella', 280, 60, 'porción', 22], ['Proteína whey (polvo)', 380, 30, 'cacito', 78],
+  ['Plátano', 89, 120, 'unidad', 1.1], ['Manzana', 52, 180, 'unidad', 0.3], ['Naranja', 47, 180, 'unidad', 0.9], ['Fresas', 32, 150, 'bol', 0.7],
+  ['Uvas', 69, 120, 'racimo pequeño', 0.7], ['Kiwi', 61, 75, 'unidad', 1.1], ['Pera', 57, 170, 'unidad', 0.4], ['Sandía', 30, 300, 'tajada', 0.6],
+  ['Melón', 34, 250, 'tajada', 0.8], ['Arándanos', 57, 100, 'bol', 0.7], ['Aguacate', 160, 100, 'medio', 2],
+  ['Ensalada verde (sin aliñar)', 17, 150, 'plato', 1.4], ['Tomate', 18, 150, 'unidad', 0.9], ['Brócoli cocido', 35, 200, 'ración', 2.4],
+  ['Verduras a la plancha', 45, 200, 'ración', 1.8], ['Judías verdes cocidas', 31, 200, 'ración', 1.9], ['Espinacas cocidas', 23, 150, 'ración', 3],
+  ['Gazpacho', 45, 250, 'vaso', 0.8], ['Crema de verduras', 50, 300, 'plato', 1.5],
+  ['Aceite de oliva', 884, 10, 'cucharada', 0], ['Mantequilla', 717, 10, 'porción', 0.9], ['Mantequilla de cacahuete', 588, 15, 'cucharada', 25],
+  ['Almendras', 579, 30, 'puñado', 21], ['Nueces', 654, 30, 'puñado', 15], ['Chocolate negro 85%', 600, 20, 'onzas', 10],
+  ['Chocolate con leche', 535, 20, 'onzas', 7.6], ['Galletas María', 436, 30, '4 galletas', 7], ['Croissant', 406, 60, 'unidad', 8],
+  ['Magdalena', 450, 50, 'unidad', 6], ['Cereales de desayuno', 380, 40, 'bol', 7], ['Miel', 304, 15, 'cucharada', 0.3],
+  ['Pizza', 266, 300, 'media pizza', 11], ['Hamburguesa completa', 250, 220, 'unidad', 13], ['Kebab', 215, 350, 'unidad', 12],
+  ['Sushi (pieza)', 145, 30, 'pieza', 6], ['Paella', 160, 300, 'plato', 7], ['Croquetas', 220, 30, 'unidad', 7],
+  ['Patatas fritas de bolsa', 536, 40, 'bolsa pequeña', 6], ['Cerveza', 43, 330, 'caña/tercio', 0.5], ['Vino tinto', 85, 150, 'copa', 0.1],
+  ['Refresco de cola', 42, 330, 'lata', 0], ['Zumo de naranja', 45, 200, 'vaso', 0.7], ['Café con leche', 40, 200, 'taza', 1.7],
 ];
 
-export const LOCAL_FOODS = LOCAL.map(([name, kcal100, portion, portionName]) => ({ name, kcal100, portion, portionName, source: 'local' }));
+export const LOCAL_FOODS = LOCAL.map(([name, kcal100, portion, portionName, prot100]) => ({ name, kcal100, portion, portionName, prot100, source: 'local' }));
 
 const norm = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
@@ -66,7 +66,8 @@ function mapProduct(p) {
   const name = p.product_name_es || p.product_name || 'Producto sin nombre';
   const brand = Array.isArray(p.brands) ? p.brands[0] : (p.brands || '').split(',')[0];
   const sq = parseFloat(p.serving_quantity);
-  return { name: brand ? `${name} · ${brand.trim()}` : name, kcal100, portion: sq > 0 ? sq : 100, portionName: sq > 0 ? 'ración' : '100 g', source: 'off', code: p.code };
+  const pr = p.nutriments?.proteins_100g;
+  return { name: brand ? `${name} · ${brand.trim()}` : name, kcal100, prot100: pr != null && isFinite(pr) ? Math.round(pr * 10) / 10 : null, portion: sq > 0 ? sq : 100, portionName: sq > 0 ? 'ración' : '100 g', source: 'off', code: p.code };
 }
 
 const FIELDS = 'code,product_name,product_name_es,brands,nutriments,serving_quantity';

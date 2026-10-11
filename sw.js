@@ -1,9 +1,9 @@
 // Service worker: la app funciona sin conexión. Cambia VERSION al publicar cambios.
-const VERSION = 'nido-v2';
+const VERSION = 'nido-v3';
 const SHELL = [
   './', 'index.html', 'css/styles.css', 'manifest.webmanifest',
   'js/app.js', 'js/store.js', 'js/util.js', 'js/calc.js', 'js/game.js', 'js/pet.js',
-  'js/plans.js', 'js/food.js', 'js/sync.js', 'js/firebase-config.js', 'js/icons.js',
+  'js/plans.js', 'js/food.js', 'js/sync.js', 'js/firebase-config.js', 'js/icons.js', 'js/extras.js',
   'fonts/jakarta-latin.woff2', 'fonts/jakarta-latin-ext.woff2',
   'icons/icon-192.png', 'icons/icon-512.png',
 ];
