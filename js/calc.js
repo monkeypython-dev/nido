@@ -28,6 +28,15 @@ export function kcalTarget(u) {
   return u.kcalOverride > 0 ? u.kcalOverride : computedTarget(u);
 }
 
+/** Objetivos de macros: proteína fija (g), grasa como % de kcal y carbohidratos el resto. */
+export function macroTargets(u) {
+  const kcal = kcalTarget(u);
+  const protein = Math.round(u.proteinTarget || 0);
+  const fat = Math.round(kcal * (u.fatPct ?? 0.28) / 9);
+  const carbs = Math.max(0, Math.round((kcal - protein * 4 - fat * 9) / 4));
+  return { protein, carbs, fat };
+}
+
 /** ¿Un total diario cuenta como "día dentro del objetivo"? */
 export function inTarget(u, total) {
   const [lo, hi] = GOALS[u.goal]?.range ?? [0.9, 1.1];

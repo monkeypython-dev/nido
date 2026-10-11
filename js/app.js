@@ -1,11 +1,11 @@
 import { load, getState, list, add, update, remove, updateProfile, setCurrentUser, exportJSON, importJSON, resetAll } from './store.js';
 import { esc, today, addDays, fmtDate, fmtNum, weekStart, weekday, pick, DAY_SHORT, DAY_NAMES, clamp, parseDate } from './util.js';
 import { computeXP, stageInfo, mood, weekCount, teamWeekStreak, coins, evaluateAchievements, foodTotals, foodGoodDays, STAGES, XP, USERS } from './game.js';
-import { kcalTarget, computedTarget, ACTIVITY, GOALS, inTarget } from './calc.js';
+import { kcalTarget, computedTarget, ACTIVITY, GOALS, inTarget, macroTargets } from './calc.js';
 import { petSVG, ITEMS, itemPreview, PET_COLORS, MOOD_LINES } from './pet.js';
 import { weekChallenge, pendingChests, rollChest, prsInSession, recentPR, painSeries, painAlert, progression, restFor, weekSummary, calendarLink, REMINDERS } from './extras.js';
 import { PLANS, TEMPLATES, ACTIVITY_TYPES, CARDIO_KINDS, IMG_BASE } from './plans.js';
-import { searchLocal, searchOFF, lookupBarcode, MEALS } from './food.js';
+import { searchLocal, searchOFF, lookupBarcode, MEALS, MACROS } from './food.js';
 import { initSync, login, logout, isConfigured, onStatus, getStatus, getUser, syncNow } from './sync.js';
 import { icon } from './icons.js';
 
@@ -784,6 +784,23 @@ function confetti() {
 // =====================================================================
 // Nutrición
 // =====================================================================
+const r1 = v => v == null || !isFinite(v) ? null : Math.round(v * 10) / 10;
+const sumMacro = (arr, k) => arr.reduce((a, f) => a + (Number(f[k]) || 0), 0);
+/** Texto corto "P 30 · C 45 · G 12" (solo los macros conocidos). */
+function macroLine(o, unit = '') {
+  const parts = MACROS.filter(m => o[m.k] != null).map(m => `${m.s} ${fmtNum(Math.round(o[m.k]))}${unit}`);
+  return parts.join(' · ');
+}
+/** Macros de un alimento para una cantidad (gramos o raciones). */
+function macrosFor(f, amount) {
+  const out = {};
+  for (const m of MACROS) {
+    if (f.kcal100 == null) out[m.k] = f[m.fix] != null ? f[m.fix] * amount : null;
+    else out[m.k] = f[m.per] != null ? f[m.per] * amount / 100 : null;
+  }
+  return out;
+}
+
 function ring(val, target, state) {
   const r = 58, c = 2 * Math.PI * r;
   const p = clamp(val / target, 0, 1);
@@ -796,7 +813,7 @@ function viewFood() {
   const target = kcalTarget(usr);
   const entries = list('foods', f => f.user === u && f.date === foodDate);
   const total = entries.reduce((a, f) => a + (Number(f.kcal) || 0), 0);
-  const prot = entries.reduce((a, f) => a + (Number(f.protein) || 0), 0);
+  const mt = macroTargets(usr);
   const left = target - total;
   const [lo, hi] = GOALS[usr.goal].range;
   const good = entries.length >= 2 && inTarget(usr, total);
@@ -820,9 +837,13 @@ function viewFood() {
         <div><span>Consumido</span><b>${fmtNum(Math.round(total))}</b></div>
         <div><span>Objetivo</span><b>${fmtNum(target)}</b></div>
         <div><span>Rango</span><b class="small nowrap">${fmtNum(Math.round(lo * target))}–${fmtNum(Math.round(hi * target))}</b></div>
-        ${usr.showProtein ? `<div class="prot-row"><span>Proteína</span><b class="small nowrap">${fmtNum(Math.round(prot))} / ${fmtNum(usr.proteinTarget)} g</b><i style="--p:${Math.min(100, Math.round(prot / (usr.proteinTarget || 1) * 100))}%"></i></div>` : ''}
       </div>
     </div>
+    ${usr.showProtein ? `<div class="macros">${MACROS.map(m => {
+      const v = sumMacro(entries, m.k), t = mt[m.k] || 1;
+      return `<div class="macro"><span>${m.l}</span><b class="num">${fmtNum(Math.round(v))}<small> / ${fmtNum(mt[m.k])} g</small></b>
+        <i style="--p:${Math.min(100, Math.round(v / t * 100))}%;--mc:${m.c}" class="${v > t * 1.1 ? 'over' : ''}"></i></div>`;
+    }).join('')}</div>` : ''}
     ${good ? `<div class="status-line ok">${icon('check', { size: 16 })} Día dentro del objetivo · +${XP.food} XP para la mascota</div>`
       : over ? `<div class="status-line bad">${icon('triangle-alert', { size: 16 })} Por encima del rango hoy. Mañana más.</div>`
         : `<div class="status-line">${icon('target', { size: 16 })} Termina dentro del rango (con 2+ comidas) para ganar +${XP.food} XP</div>`}
@@ -832,7 +853,7 @@ function viewFood() {
     const es = entries.filter(f => f.meal === m.id);
     const sub = es.reduce((a, f) => a + (Number(f.kcal) || 0), 0);
     return `<section class="card">
-      <div class="meal-head">${tile(m.ic, m.c)}<div class="grow"><b>${m.l}</b><span>${sub ? fmtNum(Math.round(sub)) + ' kcal' : 'Sin registros'}</span></div>
+      <div class="meal-head">${tile(m.ic, m.c)}<div class="grow"><b>${m.l}</b><span>${sub ? fmtNum(Math.round(sub)) + ' kcal' : 'Sin registros'}${sub && usr.showProtein ? ` · ${macroLine(Object.fromEntries(MACROS.map(m => [m.k, sumMacro(es, m.k)])), '')}` : ''}</span></div>
       <button class="icon-btn add" data-action="add-food" data-meal="${m.id}" aria-label="Añadir a ${m.l}">${icon('plus', { size: 18 })}</button></div>
       ${es.map(f => `<button class="food-row" data-action="food-entry" data-id="${f.id}"><span class="grow">${esc(f.name)}${f.grams ? ` <span class="muted tiny">${fmtNum(f.grams)} g</span>` : ''}</span><b>${fmtNum(Math.round(f.kcal))}</b></button>`).join('')}
     </section>`;
@@ -858,7 +879,9 @@ function userFoodMemory(u) {
     const k = f.name.toLowerCase();
     if (seen.has(k)) continue;
     seen.add(k);
-    rec.push({ name: f.name, kcal100: f.kcal100 || null, prot100: f.prot100 ?? null, portion: f.grams || null, kcalFixed: f.kcal100 ? null : f.kcal, protFixed: f.kcal100 ? null : (f.protein ?? null), portionName: f.grams ? 'última vez' : '', recent: true });
+    const r = { name: f.name, kcal100: f.kcal100 || null, portion: f.grams || null, kcalFixed: f.kcal100 ? null : f.kcal, portionName: f.grams ? 'última vez' : '', recent: true };
+    for (const m of MACROS) { r[m.per] = f[m.per] ?? null; r[m.fix] = f.kcal100 ? null : (f[m.k] ?? null); }
+    rec.push(r);
     if (rec.length >= 15) break;
   }
   return { favs, rec };
@@ -913,7 +936,7 @@ function openAddFood(meal) {
       content = `<label class="field"><span>¿Qué has comido?</span><input data-m-name placeholder="Ej: Bocadillo de jamón"></label>
         <div class="row gap"><label class="field grow"><span>Calorías totales</span><input type="number" inputmode="numeric" data-m-kcal placeholder="kcal"></label>
         <label class="field grow"><span>Gramos (opcional)</span><input type="number" inputmode="numeric" data-m-g></label></div>
-        <label class="field"><span>Proteína (g, opcional)</span><input type="number" inputmode="decimal" data-m-p></label>
+        <div class="row gap">${MACROS.map(m => `<label class="field grow"><span>${m.l} (g)</span><input type="number" inputmode="decimal" placeholder="opc." data-m-${m.k}></label>`).join('')}</div>
         ${mealSelect()}
         ${shareBox('kcal', '')}
         <label class="check"><input type="checkbox" data-m-fav> Guardar en favoritas</label>
@@ -940,7 +963,7 @@ function openAddFood(meal) {
         <div class="chips">${f.portion && f.portion !== 100 ? `<button class="chip" data-g="${f.portion}">${esc(f.portionName || 'ración')} · ${fmtNum(f.portion)} g</button>` : ''}
           <button class="chip" data-g="100">100 g</button>${f.portion ? `<button class="chip" data-g="${Math.round(f.portion / 2)}">Media · ${fmtNum(Math.round(f.portion / 2))} g</button><button class="chip" data-g="${f.portion * 2}">Doble · ${fmtNum(f.portion * 2)} g</button>` : ''}</div>
         <label class="field"><span>Gramos</span><input type="number" inputmode="decimal" value="${g0}" data-grams></label>`}
-      <p class="big-kcal"><b data-kcal-out class="num">0</b> kcal<span class="prot-out tiny muted block"></span></p>
+      <p class="big-kcal"><b data-kcal-out class="num">0</b> kcal<span class="macro-out tiny muted block"></span></p>
       ${mealSelect()}
       ${shareBox(fixed ? 'qty' : 'grams', fixed ? 1 : g0)}
       ${f.fav ? '' : '<label class="check"><input type="checkbox" data-fav> Guardar en favoritas</label>'}
@@ -954,11 +977,10 @@ function openAddFood(meal) {
     return `<label class="check"><input type="checkbox" data-share> También para ${oName}</label>
       <label class="field" data-share-box hidden><span>${label}</span><input type="number" inputmode="decimal" value="${def}" data-share-v data-kind="${kind}"></label>`;
   }
-  function calcProt(f = picked, amount) {
-    if (!f) return null;
-    if (f.kcal100 == null) { const pf = f.protFixed; return pf != null ? (amount ?? (Number(body.querySelector('[data-qty]')?.value) || 0)) * pf : null; }
-    return f.prot100 != null ? (amount ?? (Number(body.querySelector('[data-grams]')?.value) || 0)) * f.prot100 / 100 : null;
+  function amountNow(f = picked) {
+    return f.kcal100 == null ? (Number(body.querySelector('[data-qty]')?.value) || 0) : (Number(body.querySelector('[data-grams]')?.value) || 0);
   }
+  function calcMacros(f = picked, amount = amountNow(f)) { return macrosFor(f, amount); }
   function calcKcal() {
     const f = picked;
     if (f.kcal100 == null) return (Number(body.querySelector('[data-qty]')?.value) || 0) * (f.kcalFixed ?? f.kcal);
@@ -966,7 +988,7 @@ function openAddFood(meal) {
   }
   function updateKcal() {
     const o = body.querySelector('[data-kcal-out]'); if (o) o.textContent = fmtNum(Math.round(calcKcal()));
-    const pr = body.querySelector('.prot-out'); if (pr) { const v = calcProt(); pr.textContent = v != null ? `${fmtNum(v, 1)} g de proteína` : ''; }
+    const mo = body.querySelector('.macro-out'); if (mo) mo.textContent = macroLine(calcMacros(), ' g');
   }
 
   async function runOFF() {
@@ -1010,10 +1032,14 @@ function openAddFood(meal) {
     }
   }
 
-  function saveFood({ name, kcal, grams, kcal100, prot100, protein, mealId, fav, favData, share }) {
-    const r1 = v => v == null ? null : Math.round(v * 10) / 10;
-    add('foods', { user: u, date: foodDate, meal: mealId, name, kcal: Math.round(kcal), grams: grams || null, kcal100: kcal100 ?? null, prot100: prot100 ?? null, protein: r1(protein) });
-    if (share && share.kcal > 0) add('foods', { user: other(u), date: foodDate, meal: mealId, name, kcal: Math.round(share.kcal), grams: share.grams || null, kcal100: kcal100 ?? null, prot100: prot100 ?? null, protein: r1(share.protein) });
+  function saveFood({ name, kcal, grams, kcal100, per100 = {}, macros = {}, mealId, fav, favData, share }) {
+    const entry = (k, g, mac) => {
+      const e = { name, kcal: Math.round(k), grams: g || null, kcal100: kcal100 ?? null };
+      for (const m of MACROS) { e[m.per] = per100[m.per] ?? null; e[m.k] = r1(mac?.[m.k]); }
+      return e;
+    };
+    add('foods', { user: u, date: foodDate, meal: mealId, ...entry(kcal, grams, macros) });
+    if (share && share.kcal > 0) add('foods', { user: other(u), date: foodDate, meal: mealId, ...entry(share.kcal, share.grams, share.macros) });
     if (fav && !list('favorites', x => x.user === u && x.name.toLowerCase() === name.toLowerCase()).length) add('favorites', { user: u, ...favData });
     closeSheet(w);
     toast(`${esc(name)} · ${fmtNum(Math.round(kcal))} kcal${share ? ` (también para ${oName})` : ''}`);
@@ -1022,9 +1048,9 @@ function openAddFood(meal) {
   function readShare(f) {
     if (!body.querySelector('[data-share]')?.checked) return null;
     const inp = body.querySelector('[data-share-v]'); const v = Number(inp.value) || 0;
-    if (inp.dataset.kind === 'kcal') return { kcal: v, grams: null, protein: null };
-    if (inp.dataset.kind === 'qty') return { kcal: v * (f.kcalFixed ?? f.kcal), grams: null, protein: calcProt(f, v) };
-    return { kcal: v * f.kcal100 / 100, grams: v, protein: calcProt(f, v) };
+    if (inp.dataset.kind === 'kcal') return { kcal: v, grams: null, macros: {} };
+    if (inp.dataset.kind === 'qty') return { kcal: v * (f.kcalFixed ?? f.kcal), grams: null, macros: calcMacros(f, v) };
+    return { kcal: v * f.kcal100 / 100, grams: v, macros: calcMacros(f, v) };
   }
 
   body.addEventListener('submit', e => { e.preventDefault(); if (e.target.matches('[data-search]')) { offResults = null; runOFF(); } });
@@ -1051,27 +1077,31 @@ function openAddFood(meal) {
       const kcal = calcKcal();
       if (!(kcal > 0)) { toast('Indica una cantidad', 2000, 'triangle-alert'); return; }
       const grams = f.kcal100 != null ? Number(body.querySelector('[data-grams]').value) : null;
-      const qty = f.kcal100 == null ? Number(body.querySelector('[data-qty]').value) || 1 : null;
+      const per100 = Object.fromEntries(MACROS.map(m => [m.per, f[m.per] ?? null]));
+      const favData = { name: f.name, kcal100: f.kcal100 ?? null, kcalFixed: f.kcal100 == null ? (f.kcalFixed ?? f.kcal) : null, portion: grams || f.portion || null, portionName: f.portionName || '' };
+      for (const m of MACROS) { favData[m.per] = f[m.per] ?? null; favData[m.fix] = f.kcal100 == null ? (f[m.fix] ?? null) : null; }
       saveFood({
-        name: f.name, kcal, grams, kcal100: f.kcal100, prot100: f.prot100 ?? null, protein: calcProt(), mealId: body.querySelector('[data-meal]').value,
-        fav: body.querySelector('[data-fav]')?.checked, share: readShare(f),
-        favData: { name: f.name, kcal100: f.kcal100 ?? null, prot100: f.prot100 ?? null, kcalFixed: f.kcal100 == null ? (f.kcalFixed ?? f.kcal) : null, protFixed: f.kcal100 == null ? (f.protFixed ?? null) : null, portion: grams || f.portion || null, portionName: f.portionName || '' },
+        name: f.name, kcal, grams, kcal100: f.kcal100, per100, macros: calcMacros(), mealId: body.querySelector('[data-meal]').value,
+        fav: body.querySelector('[data-fav]')?.checked, share: readShare(f), favData,
       });
-      void qty;
     } else if (b.hasAttribute('data-m-save')) {
       const name = body.querySelector('[data-m-name]').value.trim();
       const kcal = Number(body.querySelector('[data-m-kcal]').value);
       const grams = Number(body.querySelector('[data-m-g]').value) || null;
       if (!name || !(kcal > 0)) { toast('Pon nombre y calorías', 2000, 'triangle-alert'); return; }
-      const pv = body.querySelector('[data-m-p]').value;
-      const protein = pv === '' ? null : Number(pv);
-      const prot100 = protein != null && grams ? Math.round(protein / grams * 1000) / 10 : null;
+      const macros = {}, per100 = {};
+      for (const m of MACROS) {
+        const v = body.querySelector(`[data-m-${m.k}]`).value;
+        macros[m.k] = v === '' ? null : Number(v);
+        per100[m.per] = macros[m.k] != null && grams ? r1(macros[m.k] / grams * 100) : null;
+      }
       const share = readShare({ kcal });
-      if (share && protein != null) share.protein = protein * share.kcal / kcal;
+      if (share) share.macros = Object.fromEntries(MACROS.map(m => [m.k, macros[m.k] != null ? macros[m.k] * share.kcal / kcal : null]));
+      const favData = grams ? { name, kcal100: Math.round(kcal / grams * 100), portion: grams, portionName: 'ración', ...per100 } : { name, kcal100: null, kcalFixed: kcal, portion: null, portionName: '' };
+      if (!grams) for (const m of MACROS) favData[m.fix] = macros[m.k];
       saveFood({
-        name, kcal, grams, kcal100: grams ? Math.round(kcal / grams * 100) : null, prot100, protein, mealId: body.querySelector('[data-meal]').value,
-        fav: body.querySelector('[data-m-fav]').checked, share,
-        favData: grams ? { name, kcal100: Math.round(kcal / grams * 100), prot100, portion: grams, portionName: 'ración' } : { name, kcal100: null, kcalFixed: kcal, protFixed: protein, portion: null, portionName: '' },
+        name, kcal, grams, kcal100: grams ? Math.round(kcal / grams * 100) : null, per100, macros, mealId: body.querySelector('[data-meal]').value,
+        fav: body.querySelector('[data-m-fav]').checked, share, favData,
       });
     }
   });
@@ -1085,6 +1115,7 @@ function openFoodEntry(id) {
   const w = openSheet(`<h2>${esc(f.name)}</h2>
     ${f.kcal100 ? `<label class="field"><span>Gramos</span><input type="number" inputmode="decimal" value="${f.grams || ''}" data-g></label>` : ''}
     <label class="field"><span>Calorías</span><input type="number" inputmode="numeric" value="${Math.round(f.kcal)}" data-k></label>
+    ${macroLine(f) ? `<p class="small muted">${macroLine(f, ' g')}</p>` : ''}
     <label class="field"><span>Comida</span><select data-meal>${MEALS.map(m => `<option value="${m.id}" ${m.id === f.meal ? 'selected' : ''}>${m.l}</option>`).join('')}</select></label>
     <div class="row gap"><button class="btn soft grow" data-fav ${isFav ? 'disabled' : ''}>${icon('star', { size: 16 })} ${isFav ? 'En favoritas' : 'A favoritas'}</button><button class="btn soft grow" data-dup>${icon('refresh-cw', { size: 16 })} Repetir hoy</button></div>
     <div class="row gap mt"><button class="btn danger" data-del>${icon('trash-2', { size: 16 })}</button><button class="btn primary grow" data-save>${icon('check', { size: 16 })} Guardar</button></div>`);
@@ -1095,13 +1126,19 @@ function openFoodEntry(id) {
     if (t.hasAttribute('data-del')) { remove('foods', f.id); closeSheet(w); afterChange(); }
     else if (t.hasAttribute('data-save')) {
       const g = Number(b.querySelector('[data-g]')?.value) || f.grams;
-      update('foods', f.id, { kcal: Number(b.querySelector('[data-k]').value) || 0, grams: g, meal: b.querySelector('[data-meal]').value, protein: f.prot100 != null && g ? Math.round(f.prot100 * g / 10) / 10 : f.protein ?? null });
+      const patch = { kcal: Number(b.querySelector('[data-k]').value) || 0, grams: g, meal: b.querySelector('[data-meal]').value };
+      for (const m of MACROS) patch[m.k] = f[m.per] != null && g ? r1(f[m.per] * g / 100) : (f[m.k] ?? null);
+      update('foods', f.id, patch);
       closeSheet(w); afterChange();
     } else if (t.hasAttribute('data-fav')) {
-      add('favorites', { user: f.user, name: f.name, kcal100: f.kcal100 ?? null, prot100: f.prot100 ?? null, kcalFixed: f.kcal100 ? null : f.kcal, protFixed: f.kcal100 ? null : (f.protein ?? null), portion: f.grams, portionName: f.grams ? 'ración' : '' });
+      const fav = { user: f.user, name: f.name, kcal100: f.kcal100 ?? null, kcalFixed: f.kcal100 ? null : f.kcal, portion: f.grams, portionName: f.grams ? 'ración' : '' };
+      for (const m of MACROS) { fav[m.per] = f[m.per] ?? null; fav[m.fix] = f.kcal100 ? null : (f[m.k] ?? null); }
+      add('favorites', fav);
       t.innerHTML = `${icon('star', { size: 16 })} En favoritas`; t.disabled = true;
     } else if (t.hasAttribute('data-dup')) {
-      add('foods', { user: f.user, date: today(), meal: f.meal, name: f.name, kcal: f.kcal, grams: f.grams, kcal100: f.kcal100, prot100: f.prot100 ?? null, protein: f.protein ?? null });
+      const copy = { user: f.user, date: today(), meal: f.meal, name: f.name, kcal: f.kcal, grams: f.grams, kcal100: f.kcal100 };
+      for (const m of MACROS) { copy[m.per] = f[m.per] ?? null; copy[m.k] = f[m.k] ?? null; }
+      add('foods', copy);
       closeSheet(w); toast('Añadido a hoy'); afterChange();
     }
   });
@@ -1274,7 +1311,7 @@ function openSettings() {
     return `<div class="card inset" data-user="${id}">
       <div class="row gap">${avatar(id)}<h3>${esc(x.name)}</h3></div>
       <div class="row gap"><label class="field grow"><span>Nombre</span><input data-k="name" value="${esc(x.name)}"></label>
-        <label class="field" style="width:96px"><span>Sexo</span><select data-k="sex"><option value="m" ${x.sex === 'm' ? 'selected' : ''}>Hombre</option><option value="f" ${x.sex === 'f' ? 'selected' : ''}>Mujer</option></select></label></div>
+        <label class="field" style="width:118px"><span>Sexo</span><select data-k="sex"><option value="m" ${x.sex === 'm' ? 'selected' : ''}>Hombre</option><option value="f" ${x.sex === 'f' ? 'selected' : ''}>Mujer</option></select></label></div>
       <div class="row gap"><label class="field grow"><span>Edad</span><input type="number" data-k="age" value="${x.age}"></label>
         <label class="field grow"><span>Altura (cm)</span><input type="number" data-k="height" value="${x.height}"></label>
         <label class="field grow"><span>Peso (kg)</span><input type="number" step="0.1" data-k="weight" value="${x.weight}"></label></div>
@@ -1282,8 +1319,10 @@ function openSettings() {
       <label class="field"><span>Objetivo</span><select data-k="goal">${Object.entries(GOALS).map(([k, g]) => `<option value="${k}" ${k === x.goal ? 'selected' : ''}>${g.l}</option>`).join('')}</select></label>
       <div class="row gap"><label class="field grow"><span>Kcal manual (0 = auto)</span><input type="number" data-k="kcalOverride" value="${x.kcalOverride || 0}"></label>
         <label class="field grow"><span>Sesiones/semana</span><input type="number" data-k="weeklyGoal" value="${x.weeklyGoal}"></label></div>
-      <div class="row gap"><label class="check grow"><input type="checkbox" data-k="showProtein" ${x.showProtein ? 'checked' : ''}> Contar proteína</label>
-        <label class="field grow"><span>Proteína/día (g)</span><input type="number" data-k="proteinTarget" value="${x.proteinTarget || 0}"></label></div>
+      <label class="check"><input type="checkbox" data-k="showProtein" ${x.showProtein ? 'checked' : ''}> Contar macros (proteína, carbohidratos y grasas)</label>
+      <div class="row gap"><label class="field grow"><span>Proteína/día (g)</span><input type="number" data-k="proteinTarget" value="${x.proteinTarget || 0}"></label>
+        <label class="field grow"><span>Grasas (% kcal)</span><input type="number" data-k="fatPct" value="${Math.round((x.fatPct ?? 0.28) * 100)}"></label></div>
+      <p class="small muted" data-macros>${macroLine(macroTargets(x), ' g')}</p>
       <div class="status-line">${icon('target', { size: 16 })} Objetivo calculado: <b data-calc class="num">${fmtNum(computedTarget(x))}</b> kcal/día</div>
     </div>`;
   }
@@ -1324,13 +1363,13 @@ function openSettings() {
     const x = { ...S().profile.users[card.dataset.user] };
     card.querySelectorAll('[data-k]').forEach(i => {
       const k = i.dataset.k;
-      x[k] = i.type === 'checkbox' ? i.checked : ['name', 'sex', 'goal'].includes(k) ? i.value : Number(i.value);
+      x[k] = i.type === 'checkbox' ? i.checked : ['name', 'sex', 'goal'].includes(k) ? i.value : k === 'fatPct' ? Number(i.value) / 100 : Number(i.value);
     });
     return x;
   }
   body.addEventListener('input', e => {
     const card = e.target.closest('[data-user]');
-    if (card) card.querySelector('[data-calc]').textContent = fmtNum(computedTarget(readUser(card)));
+    if (card) { const x = readUser(card); card.querySelector('[data-calc]').textContent = fmtNum(computedTarget(x)); card.querySelector('[data-macros]').textContent = macroLine(macroTargets(x), ' g'); }
   });
   body.addEventListener('change', async e => {
     if (e.target.matches('[data-import]')) {

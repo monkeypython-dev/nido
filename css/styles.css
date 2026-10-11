@@ -547,3 +547,12 @@ a.hist-row { color: inherit; font-weight: 500; }
 .zzz text { animation: twinkle 1.6s ease-in-out infinite alternate; }
 .zzz text:nth-child(2) { animation-delay: .4s; }
 .zzz text:nth-child(3) { animation-delay: .8s; }
+
+/* ================= Macros ================= */
+.macros { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); }
+.macro span { display: block; font-size: .74rem; color: var(--muted); font-weight: 650; }
+.macro b { display: block; font-size: 1.05rem; font-weight: 800; margin: 2px 0 6px; white-space: nowrap; }
+.macro b small { font-size: .72rem; color: var(--muted); font-weight: 600; }
+.macro i { display: block; position: relative; height: 5px; border-radius: 999px; background: var(--surface-3); overflow: hidden; }
+.macro i::after { content: ""; position: absolute; inset: 0; width: var(--p); background: var(--mc); border-radius: 999px; }
+.macro i.over::after { background: var(--bad); }

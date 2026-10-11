@@ -13,8 +13,8 @@ export function defaultState() {
     profile: {
       updatedAt: 0,
       users: {
-        julio: { name: 'Julio', sex: 'm', age: 34, height: 176, weight: 82, activity: 1.65, goal: 'mantener', kcalOverride: 0, weeklyGoal: 5, color: '#3b82f6', showProtein: true, proteinTarget: 150 },
-        cristina: { name: 'Cristina', sex: 'f', age: 32, height: 176, weight: 87, activity: 1.375, goal: 'perder', kcalOverride: 0, weeklyGoal: 3, color: '#ec4899', showProtein: true, proteinTarget: 130 },
+        julio: { name: 'Julio', sex: 'm', age: 34, height: 176, weight: 82, activity: 1.65, goal: 'mantener', kcalOverride: 0, weeklyGoal: 5, color: '#3b82f6', showProtein: true, proteinTarget: 150, fatPct: 0.25 },
+        cristina: { name: 'Cristina', sex: 'f', age: 32, height: 176, weight: 87, activity: 1.375, goal: 'perder', kcalOverride: 0, weeklyGoal: 3, color: '#ec4899', showProtein: true, proteinTarget: 130, fatPct: 0.32 },
       },
       pet: { name: null, color: '#7cc8a5', bornAt: null, equipped: { head: null, face: null, hand: null, bg: null }, owned: [], spent: 0, bonus: 0, chests: {}, seenStage: 0 },
       seenAchievements: [],
