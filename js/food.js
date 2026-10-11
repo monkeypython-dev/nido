@@ -100,11 +100,11 @@ export async function lookupBarcode(code) {
 }
 
 export const MEALS = [
-  { id: 'desayuno', l: 'Desayuno', icon: '☕' },
-  { id: 'comida', l: 'Comida', icon: '🍲' },
-  { id: 'merienda', l: 'Merienda', icon: '🍎' },
-  { id: 'cena', l: 'Cena', icon: '🌙' },
-  { id: 'snack', l: 'Picoteo', icon: '🍫' },
+  { id: 'desayuno', l: 'Desayuno', ic: 'coffee', c: '#d97706' },
+  { id: 'comida', l: 'Comida', ic: 'soup', c: '#10a37f' },
+  { id: 'merienda', l: 'Merienda', ic: 'apple', c: '#e64980' },
+  { id: 'cena', l: 'Cena', ic: 'moon', c: '#6d5efc' },
+  { id: 'snack', l: 'Picoteo', ic: 'cookie', c: '#a16207' },
 ];
 
 export function defaultMeal(date = new Date()) {

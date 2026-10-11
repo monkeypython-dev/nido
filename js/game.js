@@ -137,31 +137,31 @@ function maxWeightPRs(sessions) {
 export function achievementDefs() {
   const users = getState().profile.users;
   const defs = [
-    { id: 'first', icon: '🌱', t: 'Primer paso', d: 'Registrar la primera sesión', ok: c => c.sessions.length >= 1 },
-    { id: 'born', icon: '🐣', t: '¡Ha nacido!', d: 'El huevo eclosiona', ok: c => c.xp >= STAGES[1].at },
-    { id: 'joven', icon: '🌿', t: 'Creciendo', d: 'La mascota llega a joven', ok: c => c.xp >= STAGES[2].at },
-    { id: 'adulta', icon: '🌳', t: 'Mayor de edad', d: 'La mascota llega a adulta', ok: c => c.xp >= STAGES[3].at },
-    { id: 'final', icon: '🐉', t: 'Legendaria', d: 'Forma final desbloqueada', ok: c => c.xp >= STAGES[4].at },
-    { id: 'team1', icon: '🤝', t: 'Equipo', d: 'Entrenar los dos el mismo día', ok: c => c.teamDays >= 1 },
-    { id: 'team10', icon: '💞', t: 'Inseparables', d: '10 días entrenando los dos', ok: c => c.teamDays >= 10 },
-    { id: 'team30', icon: '👑', t: 'Pareja de hierro', d: '30 días entrenando los dos', ok: c => c.teamDays >= 30 },
-    { id: 'week1', icon: '📅', t: 'Semana perfecta', d: 'Los dos cumplís el objetivo semanal', ok: () => teamWeekStreak() >= 1 },
-    { id: 'week4', icon: '🔥', t: 'Un mes imparable', d: '4 semanas perfectas seguidas', ok: () => teamWeekStreak() >= 4 },
-    { id: 'pr', icon: '💪', t: 'Más fuerte', d: 'Superar tu peso máximo en un ejercicio', ok: c => maxWeightPRs(c.sessions) >= 1 },
-    { id: 'pr20', icon: '🦾', t: 'Máquina', d: '20 récords de peso', ok: c => maxWeightPRs(c.sessions) >= 20 },
-    { id: 'match', icon: '🏀', t: 'Día de partido', d: 'Registrar un partido', ok: c => c.sessions.some(s => s.type === 'basket' && s.data?.sub === 'partido') },
-    { id: 'basketweek', icon: '⛹️', t: 'Semana de baloncesto', d: 'Martes, jueves y domingo de basket en la misma semana', ok: c => basketWeek(c.sessions) },
-    { id: 'run10', icon: '🏃', t: '10 km', d: 'Acumular 10 km corriendo', ok: c => sumKm(c.sessions) >= 10 },
-    { id: 'run50', icon: '🛣️', t: '50 km', d: 'Acumular 50 km corriendo', ok: c => sumKm(c.sessions) >= 50 },
-    { id: 'rehab', icon: '🩹', t: 'Isquio de acero', d: '8 sesiones de pierna con molestia ≤ 2/10', ok: c => c.sessions.filter(s => s.user === 'julio' && s.data?.template === 'pierna' && s.data?.pain != null && s.data.pain <= 2).length >= 8 },
-    { id: 'jump', icon: '🚀', t: 'Despegue', d: 'Mejorar 5 cm el salto vertical', ok: () => jumpGain() >= 5 },
-    { id: 'weigh', icon: '⚖️', t: 'En marcha', d: 'Registrar el peso 4 semanas distintas', ok: () => weighWeeks() >= 4 },
+    { id: 'first', icon: 'sprout', t: 'Primer paso', d: 'Registrar la primera sesión', ok: c => c.sessions.length >= 1 },
+    { id: 'born', icon: 'egg', t: '¡Ha nacido!', d: 'El huevo eclosiona', ok: c => c.xp >= STAGES[1].at },
+    { id: 'joven', icon: 'leaf', t: 'Creciendo', d: 'La mascota llega a joven', ok: c => c.xp >= STAGES[2].at },
+    { id: 'adulta', icon: 'sparkles', t: 'Mayor de edad', d: 'La mascota llega a adulta', ok: c => c.xp >= STAGES[3].at },
+    { id: 'final', icon: 'crown', t: 'Legendaria', d: 'Forma final desbloqueada', ok: c => c.xp >= STAGES[4].at },
+    { id: 'team1', icon: 'heart-handshake', t: 'Equipo', d: 'Entrenar los dos el mismo día', ok: c => c.teamDays >= 1 },
+    { id: 'team10', icon: 'users', t: 'Inseparables', d: '10 días entrenando los dos', ok: c => c.teamDays >= 10 },
+    { id: 'team30', icon: 'crown', t: 'Pareja de hierro', d: '30 días entrenando los dos', ok: c => c.teamDays >= 30 },
+    { id: 'week1', icon: 'calendar-check', t: 'Semana perfecta', d: 'Los dos cumplís el objetivo semanal', ok: () => teamWeekStreak() >= 1 },
+    { id: 'week4', icon: 'flame', t: 'Un mes imparable', d: '4 semanas perfectas seguidas', ok: () => teamWeekStreak() >= 4 },
+    { id: 'pr', icon: 'dumbbell', t: 'Más fuerte', d: 'Superar tu peso máximo en un ejercicio', ok: c => maxWeightPRs(c.sessions) >= 1 },
+    { id: 'pr20', icon: 'zap', t: 'Máquina', d: '20 récords de peso', ok: c => maxWeightPRs(c.sessions) >= 20 },
+    { id: 'match', icon: 'basketball', t: 'Día de partido', d: 'Registrar un partido', ok: c => c.sessions.some(s => s.type === 'basket' && s.data?.sub === 'partido') },
+    { id: 'basketweek', icon: 'trophy', t: 'Semana de baloncesto', d: 'Martes, jueves y domingo de basket en la misma semana', ok: c => basketWeek(c.sessions) },
+    { id: 'run10', icon: 'footprints', t: '10 km', d: 'Acumular 10 km corriendo', ok: c => sumKm(c.sessions) >= 10 },
+    { id: 'run50', icon: 'route', t: '50 km', d: 'Acumular 50 km corriendo', ok: c => sumKm(c.sessions) >= 50 },
+    { id: 'rehab', icon: 'activity', t: 'Isquio de acero', d: '8 sesiones de pierna con molestia ≤ 2/10', ok: c => c.sessions.filter(s => s.user === 'julio' && s.data?.template === 'pierna' && s.data?.pain != null && s.data.pain <= 2).length >= 8 },
+    { id: 'jump', icon: 'rocket', t: 'Despegue', d: 'Mejorar 5 cm el salto vertical', ok: () => jumpGain() >= 5 },
+    { id: 'weigh', icon: 'scale', t: 'En marcha', d: 'Registrar el peso 4 semanas distintas', ok: () => weighWeeks() >= 4 },
   ];
   for (const u of ['julio', 'cristina']) {
     const name = users[u].name;
-    for (const n of [10, 25, 50, 100]) defs.push({ id: `${u}-s${n}`, icon: n >= 50 ? '🏆' : '🎖️', t: `${name}: ${n} sesiones`, d: `${name} completa ${n} sesiones`, ok: c => c.by(u).length >= n });
-    defs.push({ id: `${u}-food7`, icon: '🥗', t: `${name}: 7 días en objetivo`, d: 'Siete días seguidos dentro de las calorías', ok: () => foodStreak(u) >= 7 });
-    defs.push({ id: `${u}-food30`, icon: '🍎', t: `${name}: 30 días en objetivo`, d: 'Treinta días (en total) dentro de las calorías', ok: () => foodGoodDays(u).size >= 30 });
+    for (const n of [10, 25, 50, 100]) defs.push({ id: `${u}-s${n}`, icon: n >= 50 ? 'trophy' : 'medal', t: `${name}: ${n} sesiones`, d: `${name} completa ${n} sesiones`, ok: c => c.by(u).length >= n });
+    defs.push({ id: `${u}-food7`, icon: 'salad', t: `${name}: 7 días en objetivo`, d: 'Siete días seguidos dentro de las calorías', ok: () => foodStreak(u) >= 7 });
+    defs.push({ id: `${u}-food30`, icon: 'apple', t: `${name}: 30 días en objetivo`, d: 'Treinta días (en total) dentro de las calorías', ok: () => foodGoodDays(u).size >= 30 });
   }
   return defs;
 }

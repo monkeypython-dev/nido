@@ -4,10 +4,11 @@
 export const IMG_BASE = 'https://cdn.jsdelivr.net/npm/@bryllim/workout-guide@1.0.0/assets/';
 
 export const ACTIVITY_TYPES = {
-  gym: { l: 'Gimnasio', icon: '🏋️' },
-  cardio: { l: 'Cardio', icon: '🚴' },
-  run: { l: 'Correr', icon: '🏃' },
-  basket: { l: 'Baloncesto', icon: '🏀' },
+  gym: { l: 'Gimnasio', ic: 'dumbbell', c: 'var(--c-gym)' },
+  cardio: { l: 'Cardio', ic: 'heart-pulse', c: 'var(--c-cardio)' },
+  run: { l: 'Correr', ic: 'footprints', c: 'var(--c-run)' },
+  basket: { l: 'Baloncesto', ic: 'basketball', c: 'var(--c-basket)' },
+  rest: { l: 'Descanso', ic: 'bed', c: 'var(--c-rest)' },
 };
 
 const ex = (n, slug, s, r, note = '') => ({ n, slug, s, r, note });

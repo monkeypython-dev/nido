@@ -60,9 +60,9 @@ function background(id) {
       <circle cx="160" cy="38" r="15" fill="#fff4c2"/><circle cx="167" cy="33" r="13" fill="#1f2547"/>
       <rect y="155" width="200" height="45" fill="#2d3561"/>`;
     default: return `
-      <defs><radialGradient id="bgd" cx=".5" cy=".45" r=".7"><stop offset="0" stop-color="#fffaf2"/><stop offset="1" stop-color="#ffe9cf"/></radialGradient></defs>
+      <defs><radialGradient id="bgd" cx=".5" cy=".4" r=".75"><stop offset="0" style="stop-color:var(--pet-bg-1)"/><stop offset="1" style="stop-color:var(--pet-bg-2)"/></radialGradient></defs>
       <rect width="200" height="200" fill="url(#bgd)"/>
-      <ellipse cx="100" cy="182" rx="80" ry="14" fill="#f6d9b4"/>`;
+      <ellipse cx="100" cy="182" rx="80" ry="14" style="fill:var(--pet-ground)"/>`;
   }
 }
 
