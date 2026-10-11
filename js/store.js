@@ -4,7 +4,7 @@
 import { uid, today } from './util.js';
 
 const KEY = 'nido-v1';
-export const COLLECTIONS = ['sessions', 'foods', 'weights', 'jumps', 'favorites', 'cheers'];
+export const COLLECTIONS = ['sessions', 'foods', 'weights', 'jumps', 'favorites', 'cheers', 'mealtpl'];
 
 export function defaultState() {
   return {
@@ -18,8 +18,9 @@ export function defaultState() {
       },
       pet: { name: null, color: '#7cc8a5', bornAt: null, equipped: { head: null, face: null, hand: null, bg: null }, owned: [], spent: 0, bonus: 0, chests: {}, seenStage: 0 },
       seenAchievements: [],
+      duels: {},
     },
-    sessions: [], foods: [], weights: [], jumps: [], favorites: [], cheers: [],
+    sessions: [], foods: [], weights: [], jumps: [], favorites: [], cheers: [], mealtpl: [],
   };
 }
 

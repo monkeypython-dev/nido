@@ -3,9 +3,9 @@ import { esc, today, addDays, fmtDate, fmtNum, weekStart, weekday, pick, DAY_SHO
 import { computeXP, stageInfo, mood, weekCount, teamWeekStreak, coins, evaluateAchievements, foodTotals, foodGoodDays, STAGES, XP, USERS } from './game.js';
 import { kcalTarget, computedTarget, ACTIVITY, GOALS, inTarget, macroTargets } from './calc.js';
 import { petSVG, ITEMS, itemPreview, PET_COLORS, MOOD_LINES } from './pet.js';
-import { weekChallenge, pendingChests, rollChest, prsInSession, recentPR, painSeries, painAlert, progression, restFor, weekSummary, calendarLink, REMINDERS, kcalSuggestion } from './extras.js';
+import { weekChallenge, pendingChests, rollChest, prsInSession, recentPR, painSeries, painAlert, progression, restFor, weekSummary, calendarLink, REMINDERS, kcalSuggestion, duelScores, duelHistory, STAKES } from './extras.js';
 import { PLANS, TEMPLATES, ACTIVITY_TYPES, CARDIO_KINDS, IMG_BASE } from './plans.js';
-import { searchLocal, searchOFF, lookupBarcode, MEALS, MACROS } from './food.js';
+import { searchLocal, searchOFF, lookupBarcode, MEALS, MACROS, defaultMeal } from './food.js';
 import { initSync, login, logout, isConfigured, onStatus, getStatus, getUser, syncNow } from './sync.js';
 import { icon } from './icons.js';
 
@@ -212,6 +212,7 @@ function viewPet() {
   ${cheersInbox()}
   ${todayCard()}
   ${challengeCard()}
+  ${duelCard()}
   ${partnerFeed()}
 
   <div class="kpis">
@@ -268,6 +269,46 @@ function chestCard() {
     <div class="today-main">${tile('award', 'var(--gold)', 'lg')}<div class="grow"><div class="today-title">¡Reto superado!</div><div class="today-meta">${esc(c.title)}</div></div></div>
     <button class="btn primary block mt" data-action="open-chest" data-ws="${c.ws}">${icon('sparkles', { size: 16 })} Abrir cofre</button>
   </section>`;
+}
+
+function duelCard() {
+  const users = S().profile.users;
+  const cur = duelScores();
+  const last = duelScores(addDays(weekStart(today()), -7));
+  const lastActive = USERS.some(u => last.scores[u].sessions || last.scores[u].food);
+  const result = lastActive && !last.paid ? `<div class="duel-result">
+      ${icon('trophy', { size: 18 })}<span class="grow small">${last.winner ? `<b>${esc(users[last.winner].name)}</b> ganó el duelo pasado (${last.scores[last.winner].score}–${last.scores[other(last.winner)].score})${last.stake ? `: <b>${esc(last.stake.toLowerCase())}</b>` : ''}` : `Empate en el duelo pasado (${last.scores.julio.score}–${last.scores.cristina.score})`}</span>
+      <button class="btn sm outline" data-action="duel-paid" data-ws="${last.ws}">${last.winner && last.stake ? 'Cobrado' : 'Vale'}</button></div>` : '';
+  const lead = cur.winner;
+  return `<section class="card">
+    <div class="card-head"><h3>Duelo de la semana</h3><button class="chip solid" data-action="duel-stake">${icon('pencil', { size: 13 })} ${cur.stake ? esc(cur.stake) : 'Qué os jugáis'}</button></div>
+    ${result}
+    ${USERS.map(u => {
+      const sc = cur.scores[u];
+      return `<div class="duel-row">${avatar(u, 'sm')}<div class="grow"><div class="row between"><b class="small">${esc(users[u].name)}${lead === u ? ` <span class="lead">${icon('crown', { size: 13 })}</span>` : ''}</b><b class="num">${sc.score}<span class="tiny muted"> pts</span></b></div>
+        <div class="duel-bar"><i style="width:${sc.score}%;background:${users[u].color}"></i></div>
+        <span class="tiny muted">${sc.sessions}/${sc.goal} sesiones · ${sc.food}/7 días en objetivo</span></div></div>`;
+    }).join('')}
+    <p class="tiny muted" style="margin-bottom:0">Justo para los dos: cuenta el % de vuestro propio objetivo (60 pts sesiones + 40 pts calorías).</p>
+  </section>`;
+}
+
+function openStake() {
+  const ws = weekStart(today());
+  const cur = (S().profile.duels || {})[ws]?.stake || '';
+  const w = openSheet(`<h2>¿Qué os jugáis esta semana?</h2>
+    <div class="chips">${STAKES.map(t => `<button class="chip ${t === cur ? 'on' : ''}" data-st="${esc(t)}">${esc(t)}</button>`).join('')}</div>
+    <label class="field"><span>U otra cosa</span><input data-stake maxlength="40" value="${esc(cur)}" placeholder="Ej: elige el restaurante"></label>
+    <button class="btn primary block" data-save-stake>${icon('check', { size: 16 })} Guardar</button>`);
+  w.addEventListener('click', e => {
+    const c = e.target.closest('[data-st]');
+    if (c) { w.querySelector('[data-stake]').value = c.dataset.st; w.querySelectorAll('[data-st]').forEach(x => x.classList.toggle('on', x === c)); }
+    if (e.target.closest('[data-save-stake]')) {
+      const v = w.querySelector('[data-stake]').value.trim();
+      updateProfile(p => { p.duels = { ...(p.duels || {}), [ws]: { ...(p.duels?.[ws] || {}), stake: v } }; });
+      closeSheet(w); rerender();
+    }
+  });
 }
 
 function challengeCard() {
@@ -788,7 +829,7 @@ const r1 = v => v == null || !isFinite(v) ? null : Math.round(v * 10) / 10;
 const sumMacro = (arr, k) => arr.reduce((a, f) => a + (Number(f[k]) || 0), 0);
 /** Texto corto "P 30 · C 45 · G 12" (solo los macros conocidos). */
 function macroLine(o, unit = '') {
-  const parts = MACROS.filter(m => o[m.k] != null).map(m => `${m.s} ${fmtNum(Math.round(o[m.k]))}${unit}`);
+  const parts = MACROS.filter(m => o[m.k] != null).map(m => `${m.s} ${fmtNum(Math.round(o[m.k]))}${unit ? ' ' + unit.trim() : ''}`);
   return parts.join(' · ');
 }
 /** Macros de un alimento para una cantidad (gramos o raciones). */
@@ -886,6 +927,7 @@ function viewFood() {
       <div class="meal-head">${tile(m.ic, m.c)}<div class="grow"><b>${m.l}</b><span>${sub ? fmtNum(Math.round(sub)) + ' kcal' : 'Sin registros'}${sub && usr.showProtein ? ` · ${macroLine(Object.fromEntries(MACROS.map(m => [m.k, sumMacro(es, m.k)])), '')}` : ''}</span></div>
       <button class="icon-btn add" data-action="add-food" data-meal="${m.id}" aria-label="Añadir a ${m.l}">${icon('plus', { size: 18 })}</button></div>
       ${es.map(f => `<button class="food-row" data-action="food-entry" data-id="${f.id}"><span class="grow">${esc(f.name)}${f.grams ? ` <span class="muted tiny">${fmtNum(f.grams)} g</span>` : ''}</span><b>${fmtNum(Math.round(f.kcal))}</b></button>`).join('')}
+      ${es.length >= 2 ? `<button class="btn outline sm mt" data-action="save-tpl" data-meal="${m.id}">${icon('star', { size: 14 })} Guardar como plantilla</button>` : ''}
     </section>`;
   }).join('')}
 
@@ -898,6 +940,25 @@ function viewFood() {
         <div class="target-line" style="bottom:${Math.round(target / maxBar * 100)}%"></div></div><span>${DAY_SHORT[weekday(d)]}</span></div>`;
     }).join('')}</div>
   </section>`;
+}
+
+const TPL_FIELDS = ['name', 'kcal', 'grams', 'kcal100', ...MACROS.flatMap(m => [m.k, m.per])];
+const pickFields = f => Object.fromEntries(TPL_FIELDS.map(k => [k, f[k] ?? null]));
+
+function saveTemplate(mealId) {
+  const u = cu();
+  const items = list('foods', f => f.user === u && f.date === foodDate && f.meal === mealId).map(pickFields);
+  const meal = MEALS.find(m => m.id === mealId);
+  const w = openSheet(`<h2>Guardar plantilla</h2>
+    <p class="small muted">${items.length} alimentos · ${fmtNum(Math.round(items.reduce((a, f) => a + f.kcal, 0)))} kcal</p>
+    <label class="field"><span>Nombre</span><input data-n maxlength="40" value="${esc(meal.l)} de siempre"></label>
+    <button class="btn primary block" data-ok>${icon('check', { size: 16 })} Guardar</button>`);
+  w.querySelector('[data-n]').select();
+  w.querySelector('[data-ok]').addEventListener('click', () => {
+    const name = w.querySelector('[data-n]').value.trim() || `${meal.l} de siempre`;
+    add('mealtpl', { user: u, name, meal: mealId, items });
+    closeSheet(w); toast(`Plantilla «${esc(name)}» guardada`, 2400, 'star');
+  });
 }
 
 function userFoodMemory(u) {
@@ -961,7 +1022,14 @@ function openAddFood(meal) {
     } else if (mode === 'mias') {
       const mem = userFoodMemory(u);
       lists.mem = [...mem.favs, ...mem.rec];
-      content = lists.mem.length ? lists.mem.map((f, i) => foodItem(f, i, 'mem')).join('') : '<p class="small muted">Aquí aparecerán tus favoritas y lo último que has comido.</p>';
+      const tpls = list('mealtpl', t => t.user === u).sort((a, b) => (a.meal === meal ? -1 : 0) - (b.meal === meal ? -1 : 0) || b.createdAt - a.createdAt);
+      content = `${tpls.length ? `<div class="section-label" style="margin:4px 0 6px">Plantillas</div>${tpls.map(t => {
+        const kcal = t.items.reduce((a, f) => a + (Number(f.kcal) || 0), 0);
+        const mac = Object.fromEntries(MACROS.map(m => [m.k, t.items.some(f => f[m.k] != null) ? t.items.reduce((a, f) => a + (Number(f[m.k]) || 0), 0) : null]));
+        return `<div class="tpl-row">${tile('star', 'var(--primary)', 'sm')}<div class="grow"><b class="small block">${esc(t.name)}</b><span class="tiny muted">${t.items.length} alimentos · ${fmtNum(Math.round(kcal))} kcal${macroLine(mac) ? ' · ' + macroLine(mac) : ''}</span></div>
+          <button class="btn primary sm" data-tpl-add="${t.id}">${icon('plus', { size: 14 })} Añadir</button><button class="icon-btn sm plain" data-tpl-del="${t.id}" aria-label="Borrar plantilla">${icon('x', { size: 14 })}</button></div>`;
+      }).join('')}<div class="section-label" style="margin:16px 0 0">Alimentos</div>` : '<p class="tiny muted">Consejo: cuando una comida tenga 2 o más alimentos, pulsa «Guardar como plantilla» para repetirla de un toque.</p>'}
+        ${lists.mem.length ? lists.mem.map((f, i) => foodItem(f, i, 'mem')).join('') : '<p class="small muted">Aquí aparecerán tus favoritas y lo último que has comido.</p>'}`;
     } else if (mode === 'manual') {
       content = `<label class="field"><span>¿Qué has comido?</span><input data-m-name placeholder="Ej: Bocadillo de jamón"></label>
         <div class="row gap"><label class="field grow"><span>Calorías totales</span><input type="number" inputmode="numeric" data-m-kcal placeholder="kcal"></label>
@@ -1098,6 +1166,16 @@ function openAddFood(meal) {
   body.addEventListener('click', e => {
     const b = e.target.closest('button');
     if (!b) return;
+    if (b.dataset.tplAdd) {
+      const t = S().mealtpl.find(x => x.id === b.dataset.tplAdd);
+      t.items.forEach(it => add('foods', { ...it, user: u, date: foodDate, meal }));
+      closeSheet(w); toast(`${esc(t.name)} · ${fmtNum(Math.round(t.items.reduce((a, f) => a + (Number(f.kcal) || 0), 0)))} kcal`, 2400, 'star'); afterChange();
+      return;
+    }
+    if (b.dataset.tplDel) {
+      confirmSheet('¿Borrar esta plantilla?', 'Borrar').then(ok => { if (ok) { remove('mealtpl', b.dataset.tplDel); draw(); } });
+      return;
+    }
     if (b.dataset.mode) { stopScan(); mode = b.dataset.mode; draw(); }
     else if (b.dataset.pick) { const [src, i] = b.dataset.pick.split(':'); picked = lists[src][Number(i)]; draw(); }
     else if (b.hasAttribute('data-back')) { picked = null; draw(); }
@@ -1233,6 +1311,15 @@ function viewProgress() {
     <div class="kpi">${tile('flame', 'var(--fire)')}<div><b class="num">${teamWeekStreak()}</b><span>sem. perfectas</span></div></div>
   </div>
   <button class="btn soft block" data-action="week-summary">${icon('calendar-check', { size: 16 })} Resumen semanal para compartir</button>
+  ${(() => {
+    const h = duelHistory();
+    if (!h.weeks.length) return '';
+    const users = S().profile.users;
+    return `<section class="card"><div class="card-head"><div class="row gap">${tile('trophy', 'var(--gold)', 'sm')}<h3>Duelos</h3></div><span class="sub">${h.weeks.length} semanas</span></div>
+      <div class="duel-score">${USERS.map(x => `<div>${avatar(x)}<b class="num">${h.wins[x]}</b><span class="tiny muted">${esc(users[x].name)}</span></div>`).join(`<div><b class="num muted">${h.ties}</b><span class="tiny muted">empates</span></div>`)}</div>
+      ${h.weeks.slice(-5).reverse().map(d => `<div class="pr-row"><span class="small">${fmtDate(d.ws)} – ${fmtDate(addDays(d.ws, 6))}</span><span class="small">${d.winner ? `<b>${esc(users[d.winner].name)}</b>` : 'Empate'} · ${d.scores.julio.score}–${d.scores.cristina.score}</span></div>`).join('')}
+    </section>`;
+  })()}
 
   <section class="card">
     <div class="card-head"><div class="row gap">${tile('scale', usr.color, 'sm')}<h3>Peso corporal</h3></div><button class="btn soft sm" data-action="add-weight">${icon('plus', { size: 14 })} Registrar</button></div>
@@ -1550,6 +1637,9 @@ const actions = {
     updateProfile(p => { p.users[el.dataset.u].adjustSnooze = addDays(today(), 7); });
     toast('Te lo vuelvo a proponer en una semana', 2200, 'clock'); rerender();
   },
+  'duel-stake': () => openStake(),
+  'duel-paid': el => { updateProfile(p => { p.duels = { ...(p.duels || {}), [el.dataset.ws]: { ...(p.duels?.[el.dataset.ws] || {}), paid: true } }; }); rerender(); },
+  'save-tpl': el => saveTemplate(el.dataset.meal),
   cheer: el => openCheer(el.dataset.id),
   'cheers-seen': () => { list('cheers', c => c.to === cu() && !c.seen).forEach(c => update('cheers', c.id, { seen: true })); rerender(); },
   'open-chest': el => openChest(el.dataset.ws),
@@ -1620,10 +1710,25 @@ onStatus(s => {
   el.title = { off: 'Solo local', login: 'Sin sesión', syncing: 'Sincronizando', ok: 'Sincronizado', error: 'Error de sincronización', offline: 'Sin conexión' }[s];
 });
 
+// Atajos del icono (?a=train|food|weight|duel)
+function runShortcut() {
+  const a = new URLSearchParams(location.search).get('a');
+  if (!a || !cu()) return false;
+  history.replaceState(history.state, '', location.pathname + location.hash);
+  if (a === 'train') {
+    tab = 'train'; render();
+    const p = todayPlan();
+    openLogger(p.type === 'rest' ? { type: 'gym' } : { type: p.type, template: p.template, sub: p.sub });
+  } else if (a === 'food') { tab = 'food'; foodDate = today(); render(); openAddFood(defaultMeal()); }
+  else if (a === 'weight') { tab = 'progress'; render(); actions['add-weight'](); }
+  else if (a === 'duel') { tab = 'pet'; render(); setTimeout(() => document.querySelector('.duel-row')?.closest('.card')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 200); }
+  return true;
+}
+
 // Arranque
 syncThemeColor();
 render();
-if (!cu()) chooseUser(); else checkEvents();
+if (!cu()) chooseUser(); else if (!runShortcut()) checkEvents();
 initSync({ onNeedLogin: () => { if (!sessionStorage.getItem('nido-login-skip')) { sessionStorage.setItem('nido-login-skip', '1'); openLogin(); } }, onRemoteChange: () => { render(); checkEvents(); } });
 
 // Cambio de día con la app abierta

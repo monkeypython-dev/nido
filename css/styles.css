@@ -561,3 +561,16 @@ a.hist-row { color: inherit; font-weight: 500; }
 .adjust { border: 1px solid color-mix(in srgb, var(--primary) 35%, var(--border)); background: var(--primary-soft); border-radius: 14px; padding: 12px; }
 .adjust p { margin: 8px 0 10px; color: var(--ink-2); }
 .adjust b { color: var(--ink); }
+
+/* ================= Duelo y plantillas ================= */
+.duel-row { display: flex; gap: 10px; align-items: flex-start; margin: 12px 0; }
+.duel-row .avatar { margin-top: 2px; }
+.duel-bar { height: 8px; border-radius: 999px; background: var(--surface-3); overflow: hidden; margin: 6px 0 4px; }
+.duel-bar i { display: block; height: 100%; border-radius: 999px; transition: width .6s; }
+.lead { color: var(--gold); display: inline-flex; vertical-align: -2px; }
+.duel-result { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--gold-soft); color: var(--gold); margin-bottom: 4px; }
+.duel-result span { color: var(--ink-2); }
+.duel-score { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; text-align: center; gap: 8px; margin: 4px 0 10px; }
+.duel-score > div { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.duel-score b { font-size: 1.6rem; font-weight: 800; line-height: 1; }
+.tpl-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); }

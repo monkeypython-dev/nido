@@ -175,6 +175,43 @@ export function weekSummary(ws) {
   return { ws, per, team, xp, challenge: weekChallenge(ws) };
 }
 
+// ---------------- Duelo semanal ----------------
+export const STAKES = ['Elige la cena', 'Elige la peli', 'Masaje de 15 min', 'Desayuno en la cama', 'Se libra de fregar', 'Elige el plan del finde'];
+
+/**
+ * Puntuación justa (0–100) relativa al objetivo de cada uno:
+ * 60 pts por cumplir las sesiones de su objetivo semanal + 40 pts por días dentro de calorías (sobre 7).
+ */
+export function duelScores(ws = weekStart(today())) {
+  const users = getState().profile.users;
+  const out = {};
+  for (const u of USERS) {
+    const sessions = weekCount(u, ws), goal = users[u].weeklyGoal || 1;
+    const food = [...foodGoodDays(u)].filter(d => inWeek(d, ws)).length;
+    out[u] = { sessions, goal, food, score: Math.round(Math.min(sessions / goal, 1) * 60 + Math.min(food / 7, 1) * 40) };
+  }
+  const [a, b] = USERS;
+  const winner = out[a].score === out[b].score ? null : out[a].score > out[b].score ? a : b;
+  const duel = (getState().profile.duels || {})[ws] || {};
+  return { ws, scores: out, winner, stake: duel.stake || '', paid: !!duel.paid };
+}
+
+/** Historial de duelos terminados (semanas anteriores con actividad). */
+export function duelHistory() {
+  const duels = getState().profile.duels || {};
+  const first = list('sessions').map(s => s.date).sort()[0];
+  if (!first) return { wins: { julio: 0, cristina: 0 }, ties: 0, weeks: [] };
+  const wins = { julio: 0, cristina: 0 }; let ties = 0; const weeks = [];
+  for (let ws = weekStart(first); ws < weekStart(today()); ws = addDays(ws, 7)) {
+    const d = duelScores(ws);
+    if (!USERS.some(u => d.scores[u].sessions || d.scores[u].food)) continue;
+    if (d.winner) wins[d.winner]++; else ties++;
+    weeks.push(d);
+  }
+  void duels;
+  return { wins, ties, weeks };
+}
+
 // ---------------- Ajuste de calorías según la tendencia de peso ----------------
 const ADJUST_EVERY = 21; // días entre ajustes
 const RATES = {
