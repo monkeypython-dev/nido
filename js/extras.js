@@ -3,6 +3,7 @@
 import { list, getState } from './store.js';
 import { today, addDays, weekStart, daysBetween, weekday, parseDate } from './util.js';
 import { USERS, weekCount, foodGoodDays, XP } from './game.js';
+import { kcalTarget, kcalSafe } from './calc.js';
 import { EXCLUSIVES } from './pet.js';
 
 const inWeek = (d, ws) => d >= ws && d <= addDays(ws, 6);
@@ -172,6 +173,57 @@ export function weekSummary(ws) {
     return a + [...byDay.values()].reduce((x, n) => x + Math.min(n, 2) * XP.session, 0) + per[u].food * XP.food;
   }, 0) + team * XP.team;
   return { ws, per, team, xp, challenge: weekChallenge(ws) };
+}
+
+// ---------------- Ajuste de calorías según la tendencia de peso ----------------
+const ADJUST_EVERY = 21; // días entre ajustes
+const RATES = {
+  // kg/semana: [mínimo deseado, máximo deseado]
+  perder: [-0.8, -0.25],
+  mantener: [-0.15, 0.2],
+  ganar: [0.05, 0.4],
+};
+
+/** Pendiente (kg/semana) por mínimos cuadrados de los pesos de las últimas 4 semanas. */
+export function weightTrend(user) {
+  const since = addDays(today(), -28);
+  const pts = list('weights', w => w.user === user && w.date >= since).sort((a, b) => a.date.localeCompare(b.date));
+  if (pts.length < 3) return { ok: false, n: pts.length, reason: 'pocos' };
+  const span = daysBetween(pts[0].date, pts[pts.length - 1].date);
+  if (span < 14) return { ok: false, n: pts.length, span, reason: 'corto' };
+  const xs = pts.map(p => daysBetween(pts[0].date, p.date)), ys = pts.map(p => Number(p.kg));
+  const mx = xs.reduce((a, b) => a + b) / xs.length, my = ys.reduce((a, b) => a + b) / ys.length;
+  const num = xs.reduce((a, x, i) => a + (x - mx) * (ys[i] - my), 0);
+  const den = xs.reduce((a, x) => a + (x - mx) ** 2, 0) || 1;
+  return { ok: true, n: pts.length, span, perWeek: num / den * 7, from: pts[0].date };
+}
+
+/**
+ * Propuesta de ajuste. Devuelve:
+ *  { status: 'datos', ... }   → faltan pesos
+ *  { status: 'espera', ... }  → hubo un ajuste hace poco
+ *  { status: 'ok', ... }      → vais bien
+ *  { status: 'ajustar', delta, from, to, ... }
+ */
+export function kcalSuggestion(user) {
+  const u = getState().profile.users[user];
+  const tr = weightTrend(user);
+  if (!tr.ok) return { status: 'datos', trend: tr };
+  const [lo, hi] = RATES[u.goal] || RATES.mantener;
+  const rate = tr.perWeek;
+  const since = u.lastAdjust ? daysBetween(u.lastAdjust, today()) : 999;
+  const current = kcalTarget(u);
+  let delta = 0;
+  if (rate > hi) delta = u.goal === 'perder' ? -150 : -100;
+  else if (rate < lo) delta = 150;
+  if (!delta) return { status: 'ok', trend: tr, rate, range: [lo, hi], current };
+  if (since < ADJUST_EVERY) return { status: 'espera', trend: tr, rate, range: [lo, hi], current, days: ADJUST_EVERY - since };
+  if (u.adjustSnooze && u.adjustSnooze > today()) return { status: 'ok', snoozed: true, trend: tr, rate, range: [lo, hi], current };
+  let to = current + delta;
+  let capped = false;
+  if (delta < 0 && to < kcalSafe(u)) { to = Math.max(current, kcalSafe(u)); capped = true; }
+  if (to === current) return { status: 'limite', trend: tr, rate, range: [lo, hi], current };
+  return { status: 'ajustar', trend: tr, rate, range: [lo, hi], current, delta: to - current, to, capped };
 }
 
 // ---------------- Recordatorios en Google Calendar ----------------

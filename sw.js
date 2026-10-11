@@ -1,5 +1,5 @@
 // Service worker: la app funciona sin conexión. Cambia VERSION al publicar cambios.
-const VERSION = 'nido-v4';
+const VERSION = 'nido-v5';
 const SHELL = [
   './', 'index.html', 'css/styles.css', 'manifest.webmanifest',
   'js/app.js', 'js/store.js', 'js/util.js', 'js/calc.js', 'js/game.js', 'js/pet.js',

@@ -18,14 +18,19 @@ export function bmr(u) {
   return 10 * u.weight + 6.25 * u.height - 5 * u.age + (u.sex === 'f' ? -161 : 5);
 }
 
+export const kcalFloor = u => (u.sex === 'f' ? 1300 : 1600);
+/** Por debajo de esto no proponemos bajar sin consejo profesional. */
+export const kcalSafe = u => (u.sex === 'f' ? 1500 : 1800);
+
 export function computedTarget(u) {
   const t = bmr(u) * u.activity * (GOALS[u.goal]?.f ?? 1);
-  const floor = u.sex === 'f' ? 1300 : 1600;
-  return Math.max(floor, Math.round(t / 50) * 50);
+  return Math.max(kcalFloor(u), Math.round(t / 50) * 50);
 }
 
+/** Objetivo final: manual si lo hay; si no, automático + ajuste por tendencia. */
 export function kcalTarget(u) {
-  return u.kcalOverride > 0 ? u.kcalOverride : computedTarget(u);
+  if (u.kcalOverride > 0) return u.kcalOverride;
+  return Math.max(kcalFloor(u), computedTarget(u) + (u.kcalAdjust || 0));
 }
 
 /** Objetivos de macros: proteína fija (g), grasa como % de kcal y carbohidratos el resto. */

@@ -3,7 +3,7 @@ import { esc, today, addDays, fmtDate, fmtNum, weekStart, weekday, pick, DAY_SHO
 import { computeXP, stageInfo, mood, weekCount, teamWeekStreak, coins, evaluateAchievements, foodTotals, foodGoodDays, STAGES, XP, USERS } from './game.js';
 import { kcalTarget, computedTarget, ACTIVITY, GOALS, inTarget, macroTargets } from './calc.js';
 import { petSVG, ITEMS, itemPreview, PET_COLORS, MOOD_LINES } from './pet.js';
-import { weekChallenge, pendingChests, rollChest, prsInSession, recentPR, painSeries, painAlert, progression, restFor, weekSummary, calendarLink, REMINDERS } from './extras.js';
+import { weekChallenge, pendingChests, rollChest, prsInSession, recentPR, painSeries, painAlert, progression, restFor, weekSummary, calendarLink, REMINDERS, kcalSuggestion } from './extras.js';
 import { PLANS, TEMPLATES, ACTIVITY_TYPES, CARDIO_KINDS, IMG_BASE } from './plans.js';
 import { searchLocal, searchOFF, lookupBarcode, MEALS, MACROS } from './food.js';
 import { initSync, login, logout, isConfigured, onStatus, getStatus, getUser, syncNow } from './sync.js';
@@ -801,6 +801,34 @@ function macrosFor(f, amount) {
   return out;
 }
 
+const signed = (v, d = 1) => { const r = Number(v.toFixed(d)); return `${r > 0 ? '+' : r < 0 ? '−' : ''}${fmtNum(Math.abs(r), d)}`; };
+
+/** Tarjeta de ajuste de calorías. `compact` para Nutrición (solo si hay propuesta). */
+function adjustCard(user, { compact = false } = {}) {
+  const u = U(user);
+  const sg = kcalSuggestion(user);
+  const goalTxt = { perder: 'bajar 0,25–0,8 kg/semana', mantener: 'mantener el peso (±0,15 kg/semana)', ganar: 'subir 0,05–0,4 kg/semana' }[u.goal];
+  if (compact && sg.status !== 'ajustar') return '';
+  if (sg.status === 'datos') {
+    const t = sg.trend;
+    return `<div class="status-line">${icon('info', { size: 16 })} ${t.reason === 'pocos' ? `Registra el peso al menos 3 veces en 2 semanas para ver tu tendencia (llevas ${t.n}).` : `Tendencia en ${t.span} días: necesito al menos 14 para proponer ajustes.`}</div>`;
+  }
+  const rateTxt = `${signed(sg.rate, 2)} kg/semana`;
+  if (sg.status === 'ajustar') {
+    return `<div class="adjust ${compact ? 'compact' : ''}">
+      <div class="row gap">${tile('target', 'var(--primary)', 'sm')}<b class="grow small">Propuesta de ajuste</b></div>
+      <p class="small">Tu tendencia es <b>${rateTxt}</b> en las últimas ${Math.round(sg.trend.span / 7)} semanas; el objetivo es ${goalTxt}.
+        Propongo pasar de <b>${fmtNum(sg.current)}</b> a <b>${fmtNum(sg.to)} kcal</b> (${signed(sg.delta, 0)}).</p>
+      ${sg.capped ? `<p class="tiny muted">No bajo de ${fmtNum(sg.to)} kcal: para ir más abajo, mejor con consejo de un profesional.</p>` : ''}
+      <div class="row gap"><button class="btn primary sm grow" data-action="kcal-apply" data-u="${user}" data-delta="${sg.delta}">${icon('check', { size: 14 })} Aplicar</button>
+        <button class="btn outline sm" data-action="kcal-snooze" data-u="${user}">Ahora no</button></div>
+    </div>`;
+  }
+  if (sg.status === 'espera') return `<div class="status-line">${icon('clock', { size: 16 })} Tendencia ${rateTxt}. Hace poco que ajustaste: vuelvo a revisarlo en ${sg.days} días.</div>`;
+  if (sg.status === 'limite') return `<div class="status-line">${icon('info', { size: 16 })} Tendencia ${rateTxt}. Ya estás en el mínimo recomendable: consulta con un profesional antes de bajar más.</div>`;
+  return `<div class="status-line ok">${icon('check', { size: 16 })} Vas bien: ${rateTxt}. Objetivo: ${goalTxt}.</div>`;
+}
+
 function ring(val, target, state) {
   const r = 58, c = 2 * Math.PI * r;
   const p = clamp(val / target, 0, 1);
@@ -848,6 +876,8 @@ function viewFood() {
       : over ? `<div class="status-line bad">${icon('triangle-alert', { size: 16 })} Por encima del rango hoy. Mañana más.</div>`
         : `<div class="status-line">${icon('target', { size: 16 })} Termina dentro del rango (con 2+ comidas) para ganar +${XP.food} XP</div>`}
   </section>
+
+  ${(() => { const c = adjustCard(u, { compact: true }); return c ? `<section class="card">${c}</section>` : ''; })()}
 
   ${MEALS.map(m => {
     const es = entries.filter(f => f.meal === m.id);
@@ -1209,8 +1239,9 @@ function viewProgress() {
     ${lastW ? `<div class="big-stat"><b class="num">${fmtNum(lastW.kg, 1)}</b><span class="muted small">kg · ${fmtDate(lastW.date)}</span>
       ${weights.length >= 2 ? `<span class="delta ${wDiff < 0 ? 'down' : wDiff > 0 ? 'up' : ''}">${wDiff > 0 ? '+' : ''}${fmtNum(wDiff, 1)} kg</span>` : ''}</div>
       ${lineChart(weights.map(w => ({ date: w.date, v: Number(w.kg) })), { color: usr.color })}
+      <div class="mt">${adjustCard(u)}</div>
       <details class="tpl"><summary class="small">Ver registros ${icon('chevron-right', { size: 16, cls: 'chev' })}</summary>${weights.slice().reverse().map(w => `<div class="row between small hist-mini"><span>${fmtDate(w.date)}</span><span class="row gap"><b class="num">${fmtNum(w.kg, 1)} kg</b><button class="icon-btn sm plain" data-action="del-weight" data-id="${w.id}" aria-label="Borrar">${icon('x', { size: 14 })}</button></span></div>`).join('')}</details>`
-      : '<p class="small muted">Pésate una vez por semana, el mismo día y en ayunas. El objetivo de calorías se recalcula con tu peso.</p>'}
+      : '<p class="small muted">Pésate 1–3 veces por semana, en ayunas. El objetivo de calorías se recalcula con tu peso y, cada 3 semanas, te propondré ajustarlo según tu tendencia.</p>'}
   </section>
 
   ${u === 'julio' || jumps.length ? `<section class="card">
@@ -1324,6 +1355,7 @@ function openSettings() {
         <label class="field grow"><span>Grasas (% kcal)</span><input type="number" data-k="fatPct" value="${Math.round((x.fatPct ?? 0.28) * 100)}"></label></div>
       <p class="small muted" data-macros>${macroLine(macroTargets(x), ' g')}</p>
       <div class="status-line">${icon('target', { size: 16 })} Objetivo calculado: <b data-calc class="num">${fmtNum(computedTarget(x))}</b> kcal/día</div>
+      ${x.kcalAdjust ? `<div class="status-line mt">${icon('trending-up', { size: 16 })}<span class="grow">Ajuste por tendencia: <b>${signed(x.kcalAdjust, 0)} kcal</b> → ${fmtNum(kcalTarget(x))} kcal/día</span><button class="btn outline sm" data-reset-adjust="${id}">Quitar</button></div>` : ''}
     </div>`;
   }
   function draw() {
@@ -1382,6 +1414,7 @@ function openSettings() {
   body.addEventListener('click', async e => {
     const b = e.target.closest('button'); if (!b) return;
     if (b.dataset.themeSet) { applyTheme(b.dataset.themeSet); draw(); }
+    else if (b.dataset.resetAdjust) { updateProfile(p => { p.users[b.dataset.resetAdjust].kcalAdjust = 0; }); toast('Ajuste quitado', 2000, 'target'); draw(); rerender(); }
     else if (b.hasAttribute('data-save-users')) {
       updateProfile(p => body.querySelectorAll('[data-user]').forEach(card => {
         const x = readUser(card);
@@ -1503,6 +1536,20 @@ function chooseUser() {
 // Acciones globales
 // =====================================================================
 const actions = {
+  'kcal-apply': el => {
+    const user = el.dataset.u, delta = Number(el.dataset.delta);
+    updateProfile(p => {
+      const x = p.users[user];
+      if (x.kcalOverride > 0) x.kcalOverride += delta; else x.kcalAdjust = (x.kcalAdjust || 0) + delta;
+      x.lastAdjust = today(); x.adjustSnooze = null;
+    });
+    toast(`Objetivo actualizado: ${fmtNum(kcalTarget(U(user)))} kcal`, 2600, 'target');
+    rerender();
+  },
+  'kcal-snooze': el => {
+    updateProfile(p => { p.users[el.dataset.u].adjustSnooze = addDays(today(), 7); });
+    toast('Te lo vuelvo a proponer en una semana', 2200, 'clock'); rerender();
+  },
   cheer: el => openCheer(el.dataset.id),
   'cheers-seen': () => { list('cheers', c => c.to === cu() && !c.seen).forEach(c => update('cheers', c.id, { seen: true })); rerender(); },
   'open-chest': el => openChest(el.dataset.ws),

@@ -556,3 +556,8 @@ a.hist-row { color: inherit; font-weight: 500; }
 .macro i { display: block; position: relative; height: 5px; border-radius: 999px; background: var(--surface-3); overflow: hidden; }
 .macro i::after { content: ""; position: absolute; inset: 0; width: var(--p); background: var(--mc); border-radius: 999px; }
 .macro i.over::after { background: var(--bad); }
+
+/* ================= Ajuste de calorías ================= */
+.adjust { border: 1px solid color-mix(in srgb, var(--primary) 35%, var(--border)); background: var(--primary-soft); border-radius: 14px; padding: 12px; }
+.adjust p { margin: 8px 0 10px; color: var(--ink-2); }
+.adjust b { color: var(--ink); }
